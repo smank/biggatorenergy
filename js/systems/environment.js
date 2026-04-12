@@ -50,17 +50,17 @@ export function environmentSystem(env, dt, rng) {
   // Weather changes
   env.weatherTimer -= dt;
   if (env.weatherTimer <= 0) {
-    // Weather probabilities vary by season
+    // Weather probabilities vary by season — more diversity, more drama
     if (env.season === 'spring') {
-      env.weather = rng.pick(['clear', 'clear', 'rain', 'cloudy']);
+      env.weather = rng.pick(['clear', 'rain', 'rain', 'cloudy', 'storm', 'clear']);
     } else if (env.season === 'summer') {
-      env.weather = rng.pick(['clear', 'clear', 'clear', 'storm']);
+      env.weather = rng.pick(['clear', 'clear', 'storm', 'storm', 'cloudy', 'rain']);
     } else if (env.season === 'autumn') {
-      env.weather = rng.pick(['cloudy', 'cloudy', 'rain', 'clear']);
+      env.weather = rng.pick(['cloudy', 'rain', 'rain', 'clear', 'storm', 'cloudy']);
     } else {
-      env.weather = rng.pick(['cloudy', 'clear', 'clear', 'cloudy']);
+      env.weather = rng.pick(['cloudy', 'clear', 'storm', 'cloudy', 'rain', 'clear']);
     }
-    env.weatherTimer = rng.float(20, 60);
+    env.weatherTimer = rng.float(10, 30); // faster cycling
 
     if (env.weather === 'rain') {
       env.rainIntensity = rng.float(0.3, 0.7);

@@ -10,7 +10,7 @@ import { breedingSystem, inheritTraits } from './systems/breeding.js';
 import { predatorSystem, scarePredators } from './systems/predator.js';
 import { createEnvironment, environmentSystem, renderCelestial, renderEnvironmentEffects, getSeasonText } from './systems/environment.js';
 import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI } from './systems/render.js';
-import { createInputHandler, getCurrentPower, POWER_NAMES, POWER_COLORS } from './input.js';
+import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
 
@@ -111,10 +111,136 @@ const world = new World();
 // --- Environment ---
 const env = createEnvironment();
 
+// --- Vegetation Growth State ---
+// The swamp becomes grander over time. Starts modest, grows into something epic.
+const vegState = {
+  growth: 0.5,       // 0-3, overall vegetation multiplier
+  treeGrowth: 0.5,   // tree canopy fullness — caps grow higher over time
+  flowerBloom: 0.3,  // flower density
+  undergrowth: 0.5,  // grass/fern density
+  age: 0,            // total sim-seconds lived — drives epoch transitions
+  epoch: 0,          // 0=nascent, 1=established, 2=flourishing, 3=ancient, 4=primordial
+  orchidChance: 0,   // orchids only bloom in mature swamps
+  maxGrowth: 1.2,    // cap increases per epoch
+  surpriseTimer: 30, // countdown to next surprise event
+};
+
+const EPOCH_NAMES = ['nascent', 'established', 'flourishing', 'ancient', 'primordial'];
+const EPOCH_THRESHOLDS = [0, 120, 360, 720, 1200]; // seconds
+
+function updateVegGrowth(dt) {
+  vegState.age += dt;
+
+  // Epoch progression — the swamp matures
+  const newEpoch = EPOCH_THRESHOLDS.findLastIndex(t => vegState.age >= t);
+  if (newEpoch > vegState.epoch) {
+    vegState.epoch = newEpoch;
+    // Each epoch raises the ceiling
+    vegState.maxGrowth = 1.2 + newEpoch * 0.5; // 1.2 → 1.7 → 2.2 → 2.7 → 3.2
+  }
+
+  const seasonGrowthRate = {
+    spring: 0.01,
+    summer: 0.005,
+    autumn: -0.002,
+    winter: -0.004,
+  };
+  const rate = seasonGrowthRate[env.season] || 0;
+  const weatherMod = env.weather === 'rain' ? 1.5 : env.weather === 'storm' ? 0.8 : env.weather === 'clear' ? 0.7 : 1.0;
+  const fireDamage = fires.length * -0.01;
+
+  // Slow but relentless baseline growth — the swamp always wants to expand
+  const baseGrowth = 0.001 * (1 + vegState.epoch * 0.3);
+
+  vegState.growth = Math.max(0.2, Math.min(vegState.maxGrowth, vegState.growth + (rate * weatherMod + fireDamage + baseGrowth) * dt));
+  vegState.treeGrowth = Math.max(0.3, Math.min(vegState.maxGrowth * 0.9, vegState.treeGrowth + (rate * 0.5 * weatherMod + baseGrowth * 0.8) * dt));
+  vegState.flowerBloom = Math.max(0, Math.min(vegState.maxGrowth, vegState.flowerBloom + (rate * 1.5 * weatherMod + baseGrowth) * dt));
+  vegState.undergrowth = Math.max(0.1, Math.min(vegState.maxGrowth, vegState.undergrowth + (rate * weatherMod + baseGrowth) * dt));
+
+  // Orchids only appear in established+ swamps, bloom chance increases with age
+  vegState.orchidChance = vegState.epoch >= 1 ? Math.min(1, (vegState.epoch - 1) * 0.25 + vegState.flowerBloom * 0.1) : 0;
+
+  // --- SURPRISE EVENTS — increasingly wild as swamp ages ---
+  vegState.surpriseTimer -= dt;
+  if (vegState.surpriseTimer <= 0) {
+    vegState.surpriseTimer = rng.float(20, 50) / (1 + vegState.epoch * 0.3);
+    triggerSurprise(rng);
+  }
+}
+
+function triggerSurprise(rng) {
+  const roll = rng.random();
+  const epoch = vegState.epoch;
+
+  // Higher epochs unlock wilder surprises
+  if (roll < 0.15) {
+    // Swarm — mass wildlife spawn
+    const types = ['butterfly', 'bird', 'mosquito_swarm', 'crawfish'];
+    const swarmType = rng.pick(types);
+    for (let i = 0; i < rng.range(5, 12); i++) {
+      wildlife.push(spawnWildlife(rng, swarmType, 0));
+    }
+  } else if (roll < 0.25) {
+    // Stampede — deer or boar run through
+    const type = rng.pick(['deer', 'deer', 'wild_boar']);
+    for (let i = 0; i < rng.range(3, 7); i++) {
+      const w = spawnWildlife(rng, type, 0);
+      w.vx = (rng.chance(0.5) ? 1 : -1) * rng.float(12, 20);
+      wildlife.push(w);
+    }
+  } else if (roll < 0.35 && epoch >= 1) {
+    // Double rainbow — purely visual, stored on vegState
+    vegState.rainbow = { timer: rng.float(10, 20), opacity: 0 };
+  } else if (roll < 0.45 && epoch >= 2) {
+    // Ancient tree falls — big crash, starts fire
+    startFire(rng.float(20, CANVAS_W - 20), waterY - rng.range(3, 8), rng);
+    ripples.push({ x: rng.float(40, CANVAS_W - 40), y: waterY, radius: 0, maxRadius: 25, opacity: 1 });
+  } else if (roll < 0.55 && epoch >= 2) {
+    // Bioluminescence — water glows blue-green at night
+    vegState.biolum = { timer: rng.float(15, 30), intensity: 0 };
+  } else if (roll < 0.65 && epoch >= 3) {
+    // Mass hatching — bunch of gator eggs appear
+    for (let i = 0; i < rng.range(3, 6); i++) {
+      const x = rng.float(20, CANVAS_W - 20);
+      spawnGatorFromParents(rng, { x, y: waterY - rng.float(1, 4) },
+        { speed: 1, maxSize: rng.float(1, 1.5), aggression: 0.5, fertility: 0.5, metabolism: 1,
+          ...randomGatorColors(rng) }, null, maxGeneration);
+    }
+  } else if (roll < 0.72 && epoch >= 1) {
+    // Frog chorus — tons of frogs spawn
+    for (let i = 0; i < rng.range(6, 15); i++) {
+      spawnPrey(rng);
+    }
+  } else if (roll < 0.80 && epoch >= 3) {
+    // Primordial fog + cryptid appearance
+    events.fog = events.fog || { timer: rng.float(15, 25), maxOpacity: 0.35, opacity: 0, phase: 'rising', totalDuration: 20 };
+    const type = rng.pick(CRYPTID_TYPES);
+    wildlife.push(spawnWildlife(rng, type, 0));
+    wildlife.push(spawnWildlife(rng, type, 0));
+  }
+}
+
 // --- Events ---
 const events = createEventSystem();
 events.onAlienSurvive = spawnAlienSurvivor;
 events.onStartFire = startFire;
+events.onTornadoPull = (tx, ty, range, dt, rng) => {
+  for (const w of wildlife) {
+    if (!w.alive) continue;
+    const dist = Math.abs(w.x - tx);
+    if (dist < range) {
+      // Pull toward tornado center
+      const pull = (1 - dist / range) * 50;
+      w.vx += Math.sign(tx - w.x) * pull * dt;
+      w.vy -= pull * 0.4 * dt;
+      // Kill if sucked into center
+      if (dist < 6) {
+        w.alive = false;
+        spawnDeathParticles(w.x, w.y, '#666666');
+      }
+    }
+  }
+};
 
 // --- Persistence ---
 const persistence = createPersistence(seed);
@@ -1985,15 +2111,16 @@ function renderFullUI(ctx, simTime) {
   drawPixelText(ctx, `pop:${gatorCount}`, 2, CANVAS_H - 6);
   drawPixelText(ctx, `gen:${maxGeneration}`, 2, CANVAS_H - 13);
 
-  // Top left: current power indicator
-  const powerIdx = getCurrentPower();
-  const powerName = POWER_NAMES[powerIdx];
-  const powerColor = POWER_COLORS[powerIdx];
-  ctx.fillStyle = powerColor;
-  drawPixelText(ctx, `power:${powerName}`, 2, 3);
-  // Small key hint
-  ctx.fillStyle = '#556655';
-  drawPixelText(ctx, `[${powerIdx + 1}]`, 2 + (7 + powerName.length) * 4, 3);
+  // Top left: god mode indicator
+  if (isGodMode()) {
+    const powerIdx = getCurrentPower();
+    const powerName = POWER_NAMES[powerIdx];
+    const powerColor = POWER_COLORS[powerIdx];
+    ctx.fillStyle = powerColor;
+    drawPixelText(ctx, `god:${powerName}`, 2, 3);
+    ctx.fillStyle = '#556655';
+    drawPixelText(ctx, `[${powerIdx + 1}]`, 2 + (5 + powerName.length) * 4, 3);
+  }
 
   // Bottom right: seed and season
   const seedText = `seed:${seed.length > 12 ? seed.slice(-12) : seed}`;
@@ -2002,7 +2129,13 @@ function renderFullUI(ctx, simTime) {
   // Season + day count + moon phase
   const moonPhases = ['new', 'wax', 'half', 'gib', 'full', 'gib', 'half', 'wan'];
   const moonIndex = Math.floor((env.lunarPhase || 0) * 8) % 8;
+  const epochName = EPOCH_NAMES[vegState.epoch] || '';
   const infoText = `${env.season} d${env.dayCount || 0}`;
+  // Show epoch in top-right when not in god mode
+  if (!isGodMode() && vegState.epoch > 0) {
+    ctx.fillStyle = '#445544';
+    drawPixelText(ctx, epochName, CANVAS_W - epochName.length * 4 - 2, 3);
+  }
   drawPixelText(ctx, infoText, CANVAS_W - infoText.length * 4 - 2, CANVAS_H - 13);
 
   // Weather indicator
@@ -2012,11 +2145,13 @@ function renderFullUI(ctx, simTime) {
     drawPixelText(ctx, weatherText, CANVAS_W - weatherText.length * 4 - 2, CANVAS_H - 20);
   }
 
-  // Cursor glow — subtle pulsing dot at mouse position in current power color
-  if (cursorX >= 0 && cursorY >= 0) {
+  // Cursor glow — only in god mode
+  if (isGodMode() && cursorX >= 0 && cursorY >= 0) {
+    const pidx = getCurrentPower();
+    const pcolor = POWER_COLORS[pidx];
     const pulse = 0.4 + 0.3 * Math.sin(simTime * 5);
     ctx.globalAlpha = pulse;
-    ctx.fillStyle = powerColor;
+    ctx.fillStyle = pcolor;
     ctx.fillRect(cursorX - 1, cursorY - 1, 3, 3);
     ctx.globalAlpha = pulse * 0.3;
     ctx.fillRect(cursorX - 2, cursorY - 2, 5, 5);
@@ -2065,6 +2200,7 @@ function gameLoop(timestamp) {
   updateWildlife(dt, simTime, rng);
   updateEvents(events, world, dt, rng, waterY, simTime, env);
   updateFires(dt, rng);
+  updateVegGrowth(dt);
   updateDeathParticles(dt);
 
   // Hurricane pushes everything
@@ -2109,7 +2245,7 @@ function gameLoop(timestamp) {
   renderTerrain(ctx, terrain, waterY);
   renderWater(ctx, waterY, simTime);
   renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
-  renderVegetation(ctx, terrain, waterY, frameVegRng, simTime);
+  renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState);
   renderPrey(ctx, world, simTime);
   renderGators(ctx, world);
   renderPredators(ctx, world);

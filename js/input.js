@@ -1,6 +1,7 @@
 // Input system — god powers with mode cycling
-// Mouse wheel or keys 1-6 to select power
-// Click: activate current power at location
+// G key toggles god mode on/off
+// Mouse wheel or keys 1-6 to select power (when god mode is on)
+// Click: activate current power at location (god mode) or just drop food (normal)
 // Right-click: always scare (quick access)
 
 import { CANVAS_W, CANVAS_H } from './config.js';
@@ -9,9 +10,14 @@ export const POWER_NAMES = ['food', 'rain', 'scare', 'lightning', 'heal', 'fire'
 export const POWER_COLORS = ['#dddd44', '#4488dd', '#dd4444', '#ffffff', '#44dd44', '#dd8822'];
 
 let currentPower = 0;
+let godMode = false;
 
 export function getCurrentPower() {
   return currentPower;
+}
+
+export function isGodMode() {
+  return godMode;
 }
 
 export function createInputHandler(canvas, callbacks) {
@@ -23,23 +29,28 @@ export function createInputHandler(canvas, callbacks) {
     };
   }
 
-  // Click — activate current power
+  // Click — activate current power (god mode) or drop food (normal)
   function onDown(e) {
-    if (e.button === 2) return; // right-click handled by contextmenu
+    if (e.button === 2) return;
     e.preventDefault();
     const pos = getGamePos(e);
-    callbacks.onPower(pos.x, pos.y, POWER_NAMES[currentPower]);
+    if (godMode) {
+      callbacks.onPower(pos.x, pos.y, POWER_NAMES[currentPower]);
+    } else {
+      callbacks.onPower(pos.x, pos.y, 'food');
+    }
   }
 
-  // Right-click — always scare (quick access)
+  // Right-click — always scare
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const pos = getGamePos(e);
     callbacks.onScare(pos.x, pos.y);
   });
 
-  // Mouse wheel — cycle powers
+  // Mouse wheel — cycle powers (only in god mode)
   canvas.addEventListener('wheel', (e) => {
+    if (!godMode) return;
     e.preventDefault();
     if (e.deltaY > 0) {
       currentPower = (currentPower + 1) % POWER_NAMES.length;
@@ -48,15 +59,23 @@ export function createInputHandler(canvas, callbacks) {
     }
   }, { passive: false });
 
-  // Keyboard 1-6 — direct power select
+  // Keyboard
   window.addEventListener('keydown', (e) => {
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= POWER_NAMES.length) {
-      currentPower = num - 1;
+    // G toggles god mode
+    if (e.key === 'g' || e.key === 'G') {
+      godMode = !godMode;
+      return;
+    }
+    // 1-6 select power (only in god mode)
+    if (godMode) {
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= POWER_NAMES.length) {
+        currentPower = num - 1;
+      }
     }
   });
 
-  // Mouse move — track cursor position for glow
+  // Mouse move — track cursor for glow
   canvas.addEventListener('pointermove', (e) => {
     const pos = getGamePos(e);
     if (callbacks.onMove) {
@@ -65,5 +84,5 @@ export function createInputHandler(canvas, callbacks) {
   });
 
   canvas.addEventListener('pointerdown', onDown);
-  canvas.style.touchAction = 'none'; // prevent browser touch handling
+  canvas.style.touchAction = 'none';
 }

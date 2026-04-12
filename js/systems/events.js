@@ -206,27 +206,55 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
 
   // Tornado — moves across screen with debris
   if (events.tornado) {
-    events.tornado.x += events.tornado.speed * dt;
-    events.tornado.timer -= dt;
+    const t = events.tornado;
+    t.x += t.speed * dt;
+    t.timer -= dt;
+    const suckRange = 30;
+
     // Spawn debris particles
     if (rng.chance(0.4)) {
-      events.tornado.debris.push({
-        x: events.tornado.x + rng.float(-4, 4),
-        y: events.tornado.y + rng.float(-20, 5),
+      t.debris.push({
+        x: t.x + rng.float(-4, 4),
+        y: t.y + rng.float(-20, 5),
         vx: rng.float(-15, 15),
         vy: rng.float(-10, 5),
         life: rng.float(0.3, 1.0),
       });
     }
     // Update debris
-    for (let i = events.tornado.debris.length - 1; i >= 0; i--) {
-      const d = events.tornado.debris[i];
+    for (let i = t.debris.length - 1; i >= 0; i--) {
+      const d = t.debris[i];
       d.x += d.vx * dt;
       d.y += d.vy * dt;
       d.life -= dt;
-      if (d.life <= 0) events.tornado.debris.splice(i, 1);
+      if (d.life <= 0) t.debris.splice(i, 1);
     }
-    if (events.tornado.timer <= 0 || events.tornado.x < -20 || events.tornado.x > CANVAS_W + 20) {
+
+    // Suck in and damage gators
+    for (const [id, tr, gator] of world.query('transform', 'gator')) {
+      const dist = Math.abs(tr.x + (gator.spriteW || 10) / 2 - t.x);
+      if (dist < suckRange) {
+        // Pull toward center
+        const pull = (1 - dist / suckRange) * 40;
+        tr.vx += Math.sign(t.x - tr.x) * pull * dt;
+        tr.vy -= pull * 0.5 * dt; // lift upward
+        // Damage if very close
+        if (dist < 8) {
+          gator.health -= dt * 0.3;
+          // Fling gator upward if caught
+          tr.vy = -20;
+          tr.vx = rng.float(-15, 15);
+          if (gator.health <= 0) world.kill(id);
+        }
+      }
+    }
+
+    // Suck in wildlife — callback to main.js
+    if (events.onTornadoPull) {
+      events.onTornadoPull(t.x, t.y, suckRange, dt, rng);
+    }
+
+    if (t.timer <= 0 || t.x < -20 || t.x > CANVAS_W + 20) {
       events.tornado = null;
     }
   }

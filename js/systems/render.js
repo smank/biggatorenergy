@@ -147,9 +147,11 @@ export function renderWater(ctx, waterY, simTime) {
   }
 }
 
-export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
+export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState) {
+  // vegState controls density — vegetation grows and shrinks over time
+  const vg = vegState || { growth: 1, treeGrowth: 1, flowerBloom: 1, undergrowth: 1 };
   // --- TALL CYPRESS / SWAMP TREES ---
-  const numTrees = vegRng.range(5, 9);
+  const numTrees = Math.floor(vegRng.range(5, 9) * vg.treeGrowth);
   for (let i = 0; i < numTrees; i++) {
     const x = vegRng.range(8, CANVAS_W - 8);
     const groundY = terrain[x];
@@ -195,7 +197,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
 
       // Canopy — big, irregular, layered
       const canopyY = groundY - trunkH;
-      const canopyW = vegRng.range(12, 22);
+      const canopyW = Math.floor(vegRng.range(12, 22) * vg.treeGrowth);
       const canopyH = vegRng.range(6, 12);
 
       // Dark canopy base
@@ -296,7 +298,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
   }
 
   // --- DENSE GRASS & REEDS ---
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < Math.floor(25 * vg.undergrowth); i++) {
     const x = vegRng.range(0, CANVAS_W - 1);
     const groundY = terrain[x];
     if (groundY < waterY + 2) {
@@ -311,7 +313,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
   }
 
   // --- CATTAILS (thicker) ---
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < Math.floor(12 * vg.growth); i++) {
     const x = vegRng.range(0, CANVAS_W - 1);
     const groundY = terrain[x];
     if (Math.abs(groundY - waterY) < 10) {
@@ -386,6 +388,95 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
       ctx.fillRect(x, groundY, 2, 1);
       ctx.fillStyle = '#666655';
       ctx.fillRect(x, groundY + 1, 3, 1);
+    }
+  }
+
+  // --- ORCHIDS — only bloom in mature swamps, hang from trees ---
+  if (vg.orchidChance > 0) {
+    const numOrchids = Math.floor(vegRng.range(3, 8) * vg.orchidChance);
+    for (let i = 0; i < numOrchids; i++) {
+      const x = vegRng.range(15, CANVAS_W - 15);
+      const groundY = terrain[Math.min(CANVAS_W - 1, Math.max(0, x))];
+      if (groundY < waterY + 5) {
+        // Orchid hangs from tree canopy area
+        const oy = groundY - vegRng.range(20, 40);
+        if (oy < 5) continue;
+        const orchidColor = vegRng.pick(['#dd55cc', '#cc33aa', '#ee88dd', '#ff66ee', '#aa22cc', '#ffffff']);
+        // Stem
+        ctx.fillStyle = '#4a7a3a';
+        ctx.fillRect(x, oy, 1, 3);
+        // Flower — 3x3 with center
+        ctx.fillStyle = orchidColor;
+        ctx.fillRect(x - 1, oy - 1, 3, 1);
+        ctx.fillRect(x, oy - 2, 1, 1);
+        ctx.fillRect(x - 1, oy, 1, 1);
+        ctx.fillRect(x + 1, oy, 1, 1);
+        // Center
+        ctx.fillStyle = '#ffee44';
+        ctx.fillRect(x, oy - 1, 1, 1);
+        // Second petal layer for bigger orchids
+        if (vegRng.chance(0.4)) {
+          ctx.fillStyle = orchidColor;
+          ctx.fillRect(x - 2, oy - 1, 1, 1);
+          ctx.fillRect(x + 2, oy - 1, 1, 1);
+          ctx.fillRect(x, oy - 3, 1, 1);
+        }
+      }
+    }
+  }
+
+  // --- EPOCH GLOW — ancient swamps have a subtle mystical quality ---
+  if (vg.growth > 2.0) {
+    // Faint golden motes drifting through air
+    for (let i = 0; i < Math.floor((vg.growth - 2) * 8); i++) {
+      const mx = (simTime * 3 + i * 47) % CANVAS_W;
+      const my = waterY - 10 + Math.sin(simTime * 0.8 + i * 1.7) * 15;
+      if (my > 5 && my < waterY - 2) {
+        const pulse = Math.sin(simTime * 2 + i * 2.3) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(255, 230, 100, ${pulse * 0.15})`;
+        ctx.fillRect(Math.floor(mx), Math.floor(my), 1, 1);
+      }
+    }
+  }
+
+  // --- BIOLUMINESCENCE — water glows at night in mature swamps ---
+  if (vg.biolum && vg.biolum.timer > 0) {
+    vg.biolum.timer -= 0.016;
+    vg.biolum.intensity = Math.min(0.12, vg.biolum.intensity + 0.016 * 0.01);
+    if (vg.biolum.timer < 5) vg.biolum.intensity *= 0.98;
+    if (vg.biolum.timer <= 0) vg.biolum = null;
+    else {
+      for (let x = 0; x < CANVAS_W; x += 2) {
+        const pulse = Math.sin(simTime * 1.5 + x * 0.2) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(50, 200, 180, ${vg.biolum.intensity * pulse})`;
+        ctx.fillRect(x, waterY + 1, 2, 1);
+        ctx.fillRect(x + 1, waterY + 2, 1, 1);
+      }
+    }
+  }
+
+  // --- RAINBOW — arcs across the sky after surprise ---
+  if (vg.rainbow && vg.rainbow.timer > 0) {
+    vg.rainbow.timer -= 0.016;
+    vg.rainbow.opacity = Math.min(0.12, vg.rainbow.opacity + 0.016 * 0.02);
+    if (vg.rainbow.timer < 3) vg.rainbow.opacity *= 0.97;
+    if (vg.rainbow.timer <= 0) vg.rainbow = null;
+    else {
+      const colors = ['#ff000030', '#ff880030', '#ffff0030', '#00ff0030', '#0088ff30', '#4400ff30', '#8800ff30'];
+      const cx = CANVAS_W * 0.5;
+      const cy = waterY * 0.8;
+      const baseR = 50;
+      for (let ci = 0; ci < colors.length; ci++) {
+        ctx.fillStyle = colors[ci];
+        const r = baseR + ci * 2;
+        for (let a = 0; a < Math.PI; a += 0.03) {
+          const rx = cx + Math.cos(a) * r;
+          const ry = cy - Math.sin(a) * r * 0.5;
+          if (ry > 2 && ry < waterY) {
+            ctx.fillRect(Math.floor(rx), Math.floor(ry), 1, 1);
+          }
+        }
+      }
     }
   }
 
@@ -492,7 +583,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
 
   // --- LAND FLOWERS (wildflowers) ---
   const flowerColors = ['#aa44cc', '#cc44aa', '#ffdd44', '#ff4444', '#ff6644', '#ffffff', '#eeddff', '#ffaaaa'];
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < Math.floor(20 * vg.flowerBloom); i++) {
     const x = vegRng.range(5, CANVAS_W - 5);
     const groundY = terrain[x];
     if (groundY < waterY) {
@@ -545,7 +636,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
   }
 
   // --- FERNS ---
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < Math.floor(14 * vg.undergrowth); i++) {
     const x = vegRng.range(5, CANVAS_W - 5);
     const groundY = terrain[x];
     if (groundY < waterY) {
@@ -692,9 +783,9 @@ export function renderUnderwaterLife(ctx, waterY, simTime, vegRng) {
 
   // --- Sunken logs/debris on the bottom (static, deterministic) ---
   for (let i = 0; i < 4; i++) {
-    const lx = Math.floor(vegRng() * (CANVAS_W - 20));
-    const lw = 6 + Math.floor(vegRng() * 10);
-    const lh = 2 + Math.floor(vegRng() * 2);
+    const lx = Math.floor(vegRng.random() * (CANVAS_W - 20));
+    const lw = 6 + Math.floor(vegRng.random() * 10);
+    const lh = 2 + Math.floor(vegRng.random() * 2);
     ctx.fillStyle = '#3a2a1a';
     ctx.fillRect(lx, bottomY - lh, lw, lh);
     ctx.fillStyle = '#2e1f0f';
@@ -703,10 +794,10 @@ export function renderUnderwaterLife(ctx, waterY, simTime, vegRng) {
 
   // --- Extra water weeds with variety (deterministic placement, animated sway) ---
   for (let i = 0; i < 12; i++) {
-    const wx = Math.floor(vegRng() * CANVAS_W);
-    const wh = 6 + Math.floor(vegRng() * 14);
-    const hasFlower = vegRng() > 0.7;
-    const colorIdx = Math.floor(vegRng() * 3);
+    const wx = Math.floor(vegRng.random() * CANVAS_W);
+    const wh = 6 + Math.floor(vegRng.random() * 14);
+    const hasFlower = vegRng.random() > 0.7;
+    const colorIdx = Math.floor(vegRng.random() * 3);
     const colors = ['#2d5a1e', '#1a4a2e', '#3a6b2a'];
     const sway = Math.sin(simTime * 0.4 + i * 1.7) * 2;
     for (let j = 0; j < wh; j++) {
@@ -823,17 +914,17 @@ export function renderSkyLife(ctx, waterY, simTime, vegRng) {
 
   // --- Wispy cirrus clouds (thin horizontal lines) ---
   for (let i = 0; i < 3; i++) {
-    const cy = 5 + i * 8 + Math.floor(vegRng() * 4);
-    const cx = Math.floor(vegRng() * CANVAS_W);
-    const cw = 12 + Math.floor(vegRng() * 20);
+    const cy = 5 + i * 8 + Math.floor(vegRng.random() * 4);
+    const cx = Math.floor(vegRng.random() * CANVAS_W);
+    const cw = 12 + Math.floor(vegRng.random() * 20);
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.fillRect((cx + simTime * 0.3) % (CANVAS_W + cw) - cw, cy, cw, 1);
   }
 
   // --- Cumulus cloud puffs ---
   for (let i = 0; i < 2; i++) {
-    const cy = 10 + Math.floor(vegRng() * (skyLimit - 15));
-    const cx = Math.floor(vegRng() * CANVAS_W);
+    const cy = 10 + Math.floor(vegRng.random() * (skyLimit - 15));
+    const cx = Math.floor(vegRng.random() * CANVAS_W);
     const drift = (cx + simTime * 0.5 + i * 100) % (CANVAS_W + 20) - 10;
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     ctx.fillRect(Math.floor(drift), cy, 8, 3);
