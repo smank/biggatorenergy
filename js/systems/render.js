@@ -388,6 +388,225 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime) {
       ctx.fillRect(x, groundY + 1, 3, 1);
     }
   }
+
+  // --- FLOATING LOGS / DEBRIS ---
+  for (let i = 0; i < 4; i++) {
+    const baseX = vegRng.range(0, CANVAS_W);
+    const speed = vegRng.float(0.3, 1.2);
+    const logLen = vegRng.range(5, 12);
+    const driftX = ((baseX + simTime * speed * 8) % (CANVAS_W + logLen)) - logLen;
+    const wave = Math.sin(driftX * 0.12 + simTime * 2) * 0.6;
+    const ly = waterY + Math.floor(wave) + vegRng.range(1, 4);
+    // Log body
+    ctx.fillStyle = '#5a4a30';
+    ctx.fillRect(Math.floor(driftX), ly, logLen, 1);
+    ctx.fillStyle = '#4a3a22';
+    ctx.fillRect(Math.floor(driftX), ly + 1, logLen, 1);
+    // Broken stub at end
+    ctx.fillStyle = '#6a5a3a';
+    ctx.fillRect(Math.floor(driftX) + logLen, ly - 1, 1, 2);
+    // Tiny moss/algae on floating log
+    if (vegRng.chance(0.5)) {
+      ctx.fillStyle = '#4a7a3a';
+      ctx.fillRect(Math.floor(driftX) + vegRng.range(1, logLen - 2), ly - 1, 2, 1);
+    }
+  }
+  // Small debris bits
+  for (let i = 0; i < 6; i++) {
+    const baseX = vegRng.range(0, CANVAS_W);
+    const speed = vegRng.float(0.5, 1.8);
+    const dx = ((baseX + simTime * speed * 6) % CANVAS_W);
+    const wave = Math.sin(dx * 0.15 + simTime * 2) * 0.5;
+    const dy = waterY + Math.floor(wave) + vegRng.range(0, 3);
+    ctx.fillStyle = vegRng.chance(0.5) ? '#5a4a2a' : '#3a5a2a';
+    ctx.fillRect(Math.floor(dx), dy, vegRng.range(1, 3), 1);
+  }
+
+  // --- AQUATIC FLOWERS: WATER LILIES (larger) ---
+  for (let i = 0; i < 6; i++) {
+    const x = vegRng.range(15, CANVAS_W - 15);
+    if (terrain[x] > waterY) {
+      const wave = Math.sin(x * 0.15 + simTime * 2) * 0.5;
+      const ly = waterY + Math.floor(wave);
+      // Large lily pad (bigger than existing ones)
+      ctx.fillStyle = '#2a6a2a';
+      ctx.fillRect(x - 2, ly, 6, 1);
+      ctx.fillRect(x - 1, ly - 1, 4, 1);
+      ctx.fillRect(x - 2, ly + 1, 5, 1);
+      // Pad vein
+      ctx.fillStyle = '#1a5a1a';
+      ctx.fillRect(x + 1, ly, 1, 1);
+      // Flower petals (pink/white)
+      const petalColor = vegRng.chance(0.5) ? '#ffbbdd' : '#ffe0ee';
+      const petalColor2 = vegRng.chance(0.5) ? '#ff99cc' : '#ffffff';
+      ctx.fillStyle = petalColor;
+      ctx.fillRect(x, ly - 2, 2, 1);
+      ctx.fillRect(x - 1, ly - 1, 1, 1);
+      ctx.fillRect(x + 2, ly - 1, 1, 1);
+      ctx.fillStyle = petalColor2;
+      ctx.fillRect(x + 1, ly - 2, 1, 1);
+      // Yellow center
+      ctx.fillStyle = '#ffdd44';
+      ctx.fillRect(x, ly - 1, 1, 1);
+      ctx.fillRect(x + 1, ly - 1, 1, 1);
+    }
+  }
+
+  // --- AQUATIC FLOWERS: LOTUS ---
+  for (let i = 0; i < 4; i++) {
+    const x = vegRng.range(25, CANVAS_W - 25);
+    if (terrain[x] > waterY) {
+      const wave = Math.sin(x * 0.13 + simTime * 1.8) * 0.4;
+      const ly = waterY + Math.floor(wave);
+      const sway = Math.sin(simTime * 0.6 + x * 0.2) * 0.3;
+      const sx = Math.round(sway);
+      // Stem rising from water
+      ctx.fillStyle = '#3a6a2a';
+      ctx.fillRect(x + sx, ly, 1, 1);
+      ctx.fillRect(x + sx, ly - 1, 1, 1);
+      // Lotus bloom (3-4px, pink/red)
+      const lotusColor = vegRng.chance(0.5) ? '#ee5577' : '#ff7799';
+      ctx.fillStyle = lotusColor;
+      ctx.fillRect(x - 1 + sx, ly - 2, 3, 1);
+      ctx.fillRect(x + sx, ly - 3, 2, 1);
+      // Lighter tip
+      ctx.fillStyle = '#ffaacc';
+      ctx.fillRect(x + sx, ly - 3, 1, 1);
+    }
+  }
+
+  // --- DUCKWEED PATCHES ---
+  for (let i = 0; i < 12; i++) {
+    const cx = vegRng.range(5, CANVAS_W - 5);
+    if (terrain[cx] > waterY) {
+      const clusterSize = vegRng.range(3, 8);
+      for (let j = 0; j < clusterSize; j++) {
+        const dx = cx + vegRng.range(-4, 4);
+        const wave = Math.sin(dx * 0.15 + simTime * 2) * 0.4;
+        const dy = waterY + Math.floor(wave) + vegRng.range(-1, 1);
+        ctx.fillStyle = vegRng.chance(0.6) ? '#4a8a3a' : '#3a7a2a';
+        ctx.fillRect(dx, dy, 1, 1);
+      }
+    }
+  }
+
+  // --- LAND FLOWERS (wildflowers) ---
+  const flowerColors = ['#aa44cc', '#cc44aa', '#ffdd44', '#ff4444', '#ff6644', '#ffffff', '#eeddff', '#ffaaaa'];
+  for (let i = 0; i < 20; i++) {
+    const x = vegRng.range(5, CANVAS_W - 5);
+    const groundY = terrain[x];
+    if (groundY < waterY) {
+      const colorIdx = vegRng.range(0, flowerColors.length - 1);
+      const sway = Math.sin(simTime * 1.2 + x * 0.7 + i) * 0.3;
+      const sx = Math.round(sway);
+      // Stem
+      ctx.fillStyle = '#3a6a22';
+      ctx.fillRect(x, groundY - 1, 1, 1);
+      ctx.fillRect(x + sx, groundY - 2, 1, 1);
+      // Flower head
+      ctx.fillStyle = flowerColors[colorIdx];
+      ctx.fillRect(x + sx, groundY - 3, 1, 1);
+      // Some flowers get an extra petal pixel
+      if (vegRng.chance(0.4)) {
+        ctx.fillRect(x + sx - 1, groundY - 3, 1, 1);
+        ctx.fillRect(x + sx + 1, groundY - 3, 1, 1);
+      }
+      // Occasional center dot
+      if (vegRng.chance(0.3)) {
+        ctx.fillStyle = '#ffee44';
+        ctx.fillRect(x + sx, groundY - 3, 1, 1);
+      }
+    }
+  }
+
+  // --- MUSHROOMS ---
+  for (let i = 0; i < 8; i++) {
+    const x = vegRng.range(8, CANVAS_W - 8);
+    const groundY = terrain[x];
+    if (groundY < waterY && groundY < waterY - 2) {
+      // Brown stem
+      ctx.fillStyle = '#8a7a5a';
+      ctx.fillRect(x, groundY - 1, 1, 1);
+      ctx.fillRect(x, groundY, 1, 1);
+      // Red cap
+      ctx.fillStyle = '#cc3322';
+      ctx.fillRect(x - 1, groundY - 2, 3, 1);
+      ctx.fillRect(x, groundY - 3, 1, 1);
+      // White spots on cap
+      if (vegRng.chance(0.7)) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 1, groundY - 2, 1, 1);
+      }
+      if (vegRng.chance(0.5)) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x + 1, groundY - 2, 1, 1);
+      }
+    }
+  }
+
+  // --- FERNS ---
+  for (let i = 0; i < 14; i++) {
+    const x = vegRng.range(5, CANVAS_W - 5);
+    const groundY = terrain[x];
+    if (groundY < waterY) {
+      const sway = Math.sin(simTime * 0.8 + x * 0.4 + i * 1.3) * 0.4;
+      const sx = Math.round(sway);
+      const fernColor = vegRng.chance(0.5) ? '#2a6a22' : '#3a7a2a';
+      ctx.fillStyle = fernColor;
+      // Triangular fern shape, 3-4px tall
+      const h = vegRng.range(3, 4);
+      for (let dy = 0; dy < h; dy++) {
+        const width = h - dy; // wider at bottom, narrow at top
+        const fy = groundY - dy - 1;
+        const fx = x - Math.floor(width / 2) + sx;
+        ctx.fillRect(fx, fy, width, 1);
+      }
+      // Darker center stem
+      ctx.fillStyle = '#1a5a18';
+      ctx.fillRect(x + sx, groundY - 1, 1, 1);
+      ctx.fillRect(x + sx, groundY - 2, 1, 1);
+    }
+  }
+
+  // --- GROUND TEXTURE ---
+  // Dark mud spots near water line
+  for (let i = 0; i < 15; i++) {
+    const x = vegRng.range(2, CANVAS_W - 2);
+    const groundY = terrain[x];
+    if (groundY < waterY && groundY > waterY - 6) {
+      const patchW = vegRng.range(2, 5);
+      ctx.fillStyle = vegRng.chance(0.5) ? '#3a3018' : '#44381e';
+      ctx.fillRect(x, groundY + 1, patchW, 1);
+      if (vegRng.chance(0.4)) {
+        ctx.fillRect(x + 1, groundY + 2, patchW - 1, 1);
+      }
+    }
+  }
+  // Lighter sandy spots on higher ground
+  for (let i = 0; i < 10; i++) {
+    const x = vegRng.range(2, CANVAS_W - 2);
+    const groundY = terrain[x];
+    if (groundY < waterY - 6) {
+      const patchW = vegRng.range(1, 4);
+      ctx.fillStyle = vegRng.chance(0.5) ? '#8a7a5a' : '#7a6a4a';
+      ctx.fillRect(x, groundY + 1, patchW, 1);
+    }
+  }
+  // Extra grass tufts on land
+  for (let i = 0; i < 18; i++) {
+    const x = vegRng.range(0, CANVAS_W - 1);
+    const groundY = terrain[x];
+    if (groundY < waterY) {
+      ctx.fillStyle = vegRng.chance(0.5) ? '#4a8a2e' : '#3a6a1e';
+      ctx.fillRect(x, groundY - 1, 1, 1);
+      if (vegRng.chance(0.5)) {
+        ctx.fillRect(x + 1, groundY - 1, 1, 1);
+      }
+      if (vegRng.chance(0.3)) {
+        ctx.fillRect(x, groundY - 2, 1, 1);
+      }
+    }
+  }
 }
 
 // --- Entity Rendering ---
@@ -463,6 +682,263 @@ export function renderPrey(ctx, world, simTime) {
     const sprite = prey.sprite;
     if (sprite) {
       drawSprite(ctx, sprite, Math.floor(tr.x), Math.floor(tr.y), tr.vx < 0);
+    }
+  }
+}
+
+export function renderUnderwaterLife(ctx, waterY, simTime, vegRng) {
+  const bottomY = CANVAS_H - 1;
+  const waterDepth = CANVAS_H - waterY;
+
+  // --- Sunken logs/debris on the bottom (static, deterministic) ---
+  for (let i = 0; i < 4; i++) {
+    const lx = Math.floor(vegRng() * (CANVAS_W - 20));
+    const lw = 6 + Math.floor(vegRng() * 10);
+    const lh = 2 + Math.floor(vegRng() * 2);
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(lx, bottomY - lh, lw, lh);
+    ctx.fillStyle = '#2e1f0f';
+    ctx.fillRect(lx + 1, bottomY - lh, lw - 2, 1);
+  }
+
+  // --- Extra water weeds with variety (deterministic placement, animated sway) ---
+  for (let i = 0; i < 12; i++) {
+    const wx = Math.floor(vegRng() * CANVAS_W);
+    const wh = 6 + Math.floor(vegRng() * 14);
+    const hasFlower = vegRng() > 0.7;
+    const colorIdx = Math.floor(vegRng() * 3);
+    const colors = ['#2d5a1e', '#1a4a2e', '#3a6b2a'];
+    const sway = Math.sin(simTime * 0.4 + i * 1.7) * 2;
+    for (let j = 0; j < wh; j++) {
+      const t = j / wh;
+      const dx = Math.floor(sway * t);
+      ctx.fillStyle = colors[colorIdx];
+      ctx.fillRect(wx + dx, bottomY - j, 1, 1);
+    }
+    if (hasFlower) {
+      const flowerColors = ['#ff6699', '#ffcc44', '#ff9944'];
+      ctx.fillStyle = flowerColors[colorIdx];
+      const dx = Math.floor(sway);
+      ctx.fillRect(wx + dx, bottomY - wh, 2, 1);
+      ctx.fillRect(wx + dx, bottomY - wh - 1, 1, 1);
+    }
+  }
+
+  // --- Murky particles (slow drifting pixels) ---
+  for (let i = 0; i < 20; i++) {
+    const px = (i * 37 + Math.sin(simTime * 0.1 + i) * 5) % CANVAS_W;
+    const py = waterY + 4 + ((i * 53 + Math.cos(simTime * 0.08 + i * 2) * 3) % (waterDepth - 8));
+    const shades = ['#3a6b5e', '#2a5a4e', '#4a7b6e', '#355f53'];
+    ctx.fillStyle = shades[i % shades.length];
+    ctx.fillRect(Math.floor(px), Math.floor(py), 1, 1);
+  }
+
+  // --- Underwater bubbles rising from bottom ---
+  for (let i = 0; i < 6; i++) {
+    const bx = (i * 43 + 7) % CANVAS_W;
+    const riseSpeed = 8 + (i % 3) * 4;
+    const by = bottomY - ((simTime * riseSpeed + i * 31) % waterDepth);
+    if (by > waterY) {
+      ctx.fillStyle = 'rgba(200,230,255,0.5)';
+      ctx.fillRect(Math.floor(bx + Math.sin(simTime + i) * 2), Math.floor(by), 1, 1);
+    }
+  }
+
+  // --- Schools of tiny fish (3-6 dots each, sinusoidal) ---
+  const schoolColors = ['#c0c8d0', '#ff8844', '#5588cc'];
+  for (let s = 0; s < 3; s++) {
+    const count = 3 + (s % 4);
+    const baseX = ((simTime * (10 + s * 5) + s * 90) % (CANVAS_W + 40)) - 20;
+    const baseY = waterY + 10 + s * (waterDepth / 4);
+    for (let f = 0; f < count; f++) {
+      const fx = baseX + f * 3 + Math.sin(simTime * 2 + f) * 2;
+      const fy = baseY + Math.sin(simTime * 1.5 + f * 0.8 + s) * 4;
+      if (fy > waterY && fy < CANVAS_H) {
+        ctx.fillStyle = schoolColors[s];
+        ctx.fillRect(Math.floor(fx), Math.floor(fy), 1, 1);
+      }
+    }
+  }
+
+  // --- Catfish / bottom feeders (4-5px near bottom, slow) ---
+  for (let i = 0; i < 3; i++) {
+    const cx = ((simTime * (2 + i) + i * 80) % (CANVAS_W + 10)) - 5;
+    const cy = bottomY - 3 - i * 2;
+    ctx.fillStyle = '#4a3a2a';
+    ctx.fillRect(Math.floor(cx), cy, 4, 2);
+    ctx.fillStyle = '#5a4a3a';
+    ctx.fillRect(Math.floor(cx) + 4, cy, 1, 1);
+    // whiskers
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(Math.floor(cx) + 5, cy - 1, 1, 1);
+    ctx.fillRect(Math.floor(cx) + 5, cy + 1, 1, 1);
+  }
+
+  // --- Turtle swimming underwater (3x2 green blob, slow) ---
+  {
+    const tx = ((simTime * 4 + 150) % (CANVAS_W + 20)) - 10;
+    const ty = waterY + waterDepth * 0.3 + Math.sin(simTime * 0.5) * 5;
+    if (ty > waterY && ty < CANVAS_H - 4) {
+      ctx.fillStyle = '#3a7a3a';
+      ctx.fillRect(Math.floor(tx), Math.floor(ty), 3, 2);
+      // head
+      ctx.fillStyle = '#4a8a4a';
+      ctx.fillRect(Math.floor(tx) + 3, Math.floor(ty), 1, 1);
+      // legs
+      ctx.fillStyle = '#3a7a3a';
+      ctx.fillRect(Math.floor(tx), Math.floor(ty) + 2, 1, 1);
+      ctx.fillRect(Math.floor(tx) + 2, Math.floor(ty) + 2, 1, 1);
+    }
+  }
+
+  // --- Large shadow (alligator gar) occasional pass ---
+  {
+    const garCycle = (simTime * 1.5) % 300;
+    if (garCycle < 80) {
+      const gx = (garCycle / 80) * (CANVAS_W + 30) - 15;
+      const gy = waterY + waterDepth * 0.5;
+      ctx.fillStyle = 'rgba(20,30,25,0.35)';
+      ctx.fillRect(Math.floor(gx), Math.floor(gy), 10, 2);
+      ctx.fillRect(Math.floor(gx) + 10, Math.floor(gy), 2, 1);
+      ctx.fillRect(Math.floor(gx) - 1, Math.floor(gy) + 1, 1, 1);
+    }
+  }
+
+  // --- Crawdads / crabs on the bottom ---
+  for (let i = 0; i < 4; i++) {
+    const skitter = Math.sin(simTime * 3 + i * 2.5) * 8;
+    const crx = (i * 60 + 20 + skitter) % CANVAS_W;
+    const cry = bottomY - 1;
+    ctx.fillStyle = i % 2 === 0 ? '#8a3a2a' : '#6a4a3a';
+    ctx.fillRect(Math.floor(crx), cry, 2, 1);
+    // claws
+    ctx.fillRect(Math.floor(crx) - 1, cry - 1, 1, 1);
+    ctx.fillRect(Math.floor(crx) + 2, cry - 1, 1, 1);
+  }
+}
+
+export function renderSkyLife(ctx, waterY, simTime, vegRng) {
+  const skyTop = 0;
+  const skyLimit = Math.floor(waterY * 0.5);
+
+  // --- Wispy cirrus clouds (thin horizontal lines) ---
+  for (let i = 0; i < 3; i++) {
+    const cy = 5 + i * 8 + Math.floor(vegRng() * 4);
+    const cx = Math.floor(vegRng() * CANVAS_W);
+    const cw = 12 + Math.floor(vegRng() * 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect((cx + simTime * 0.3) % (CANVAS_W + cw) - cw, cy, cw, 1);
+  }
+
+  // --- Cumulus cloud puffs ---
+  for (let i = 0; i < 2; i++) {
+    const cy = 10 + Math.floor(vegRng() * (skyLimit - 15));
+    const cx = Math.floor(vegRng() * CANVAS_W);
+    const drift = (cx + simTime * 0.5 + i * 100) % (CANVAS_W + 20) - 10;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(Math.floor(drift), cy, 8, 3);
+    ctx.fillRect(Math.floor(drift) + 2, cy - 1, 4, 1);
+    ctx.fillRect(Math.floor(drift) + 1, cy + 3, 6, 1);
+  }
+
+  // --- Bird V-formations (occasional chevron of 5-7 dots) ---
+  {
+    const birdCycle = (simTime * 3) % 500;
+    if (birdCycle < 120) {
+      const bx = (birdCycle / 120) * (CANVAS_W + 40) - 20;
+      const by = 8 + Math.sin(simTime * 0.2) * 3;
+      const count = 5 + Math.floor(simTime * 0.1) % 3;
+      ctx.fillStyle = '#1a1a2a';
+      for (let b = 0; b < count; b++) {
+        const side = b % 2 === 0 ? 1 : -1;
+        const rank = Math.ceil(b / 2);
+        const fx = Math.floor(bx - rank * 3);
+        const fy = Math.floor(by + side * rank * 2);
+        if (fy >= 0 && fy < skyLimit) {
+          ctx.fillRect(fx, fy, 1, 1);
+        }
+      }
+    }
+  }
+
+  // --- Distant airplane (tiny cross, very high, slow) ---
+  {
+    const planeCycle = (simTime * 2) % 600;
+    if (planeCycle < 180) {
+      const px = (planeCycle / 180) * (CANVAS_W + 10) - 5;
+      const py = 3;
+      ctx.fillStyle = '#aaaacc';
+      ctx.fillRect(Math.floor(px), py, 2, 1);
+      ctx.fillRect(Math.floor(px), py - 1, 1, 1);
+      ctx.fillRect(Math.floor(px), py + 1, 1, 1);
+    }
+  }
+
+  // --- Helicopter (rare, 3-4px with spinning rotor) ---
+  {
+    const heliCycle = (simTime * 1.2) % 900;
+    if (heliCycle < 100) {
+      const hx = (heliCycle / 100) * (CANVAS_W + 10) - 5;
+      const hy = 12;
+      ctx.fillStyle = '#555566';
+      ctx.fillRect(Math.floor(hx), hy, 3, 2);
+      // tail
+      ctx.fillRect(Math.floor(hx) - 2, hy, 2, 1);
+      // spinning rotor
+      const rotorPhase = Math.floor(simTime * 10) % 2;
+      ctx.fillStyle = '#777788';
+      if (rotorPhase === 0) {
+        ctx.fillRect(Math.floor(hx) - 1, hy - 1, 5, 1);
+      } else {
+        ctx.fillRect(Math.floor(hx) + 1, hy - 1, 1, 1);
+      }
+    }
+  }
+
+  // --- Hot air balloon (rare, colorful 4x5, drifts slowly) ---
+  {
+    const balloonCycle = (simTime * 0.8) % 1200;
+    if (balloonCycle < 150) {
+      const bax = (balloonCycle / 150) * (CANVAS_W + 10) - 5;
+      const bay = 6 + Math.sin(simTime * 0.3) * 2;
+      // envelope
+      ctx.fillStyle = '#cc3333';
+      ctx.fillRect(Math.floor(bax), Math.floor(bay), 4, 2);
+      ctx.fillStyle = '#cccc33';
+      ctx.fillRect(Math.floor(bax), Math.floor(bay) + 2, 4, 1);
+      ctx.fillStyle = '#3366cc';
+      ctx.fillRect(Math.floor(bax) + 1, Math.floor(bay) - 1, 2, 1);
+      // basket
+      ctx.fillStyle = '#6a4a2a';
+      ctx.fillRect(Math.floor(bax) + 1, Math.floor(bay) + 3, 2, 1);
+      // ropes
+      ctx.fillStyle = '#555555';
+      ctx.fillRect(Math.floor(bax) + 1, Math.floor(bay) + 3, 1, 1);
+      ctx.fillRect(Math.floor(bax) + 2, Math.floor(bay) + 3, 1, 1);
+    }
+  }
+
+  // --- Pollen / seeds drifting downward ---
+  for (let i = 0; i < 8; i++) {
+    const px = (i * 31 + simTime * 1.5 + Math.sin(simTime * 0.5 + i) * 10) % CANVAS_W;
+    const py = ((simTime * 3 + i * 19) % (waterY * 0.8));
+    ctx.fillStyle = i % 3 === 0 ? '#ffffaa' : 'rgba(255,255,255,0.4)';
+    ctx.fillRect(Math.floor(px), Math.floor(py), 1, 1);
+  }
+
+  // --- Hawks circling (single dark pixel, sin/cos circles) ---
+  {
+    const hawkR = 12;
+    const hawkCx = CANVAS_W * 0.7;
+    const hawkCy = skyLimit * 0.6;
+    const hx = hawkCx + Math.cos(simTime * 0.3) * hawkR;
+    const hy = hawkCy + Math.sin(simTime * 0.3) * hawkR * 0.5;
+    if (hy >= 0 && hy < skyLimit) {
+      ctx.fillStyle = '#2a1a1a';
+      ctx.fillRect(Math.floor(hx), Math.floor(hy), 1, 1);
+      // wings
+      ctx.fillRect(Math.floor(hx) - 1, Math.floor(hy), 1, 1);
+      ctx.fillRect(Math.floor(hx) + 1, Math.floor(hy), 1, 1);
     }
   }
 }

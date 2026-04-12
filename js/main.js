@@ -9,8 +9,8 @@ import { lifecycleSystem } from './systems/lifecycle.js';
 import { breedingSystem, inheritTraits } from './systems/breeding.js';
 import { predatorSystem, scarePredators } from './systems/predator.js';
 import { createEnvironment, environmentSystem, renderCelestial, renderEnvironmentEffects, getSeasonText } from './systems/environment.js';
-import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUI } from './systems/render.js';
-import { createInputHandler } from './input.js';
+import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI } from './systems/render.js';
+import { createInputHandler, getCurrentPower, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
 
@@ -255,6 +255,8 @@ const WILDLIFE_TYPES = [
   'turtle', 'snake', 'bird', 'butterfly', 'raccoon', 'opossum',
   'heron_bg', 'nutria', 'crawfish', 'mosquito_swarm', 'egret',
   'armadillo', 'rabbit', 'deer',
+  'water_moccasin', 'pelican', 'osprey', 'wild_boar', 'panther',
+  'coyote', 'beaver', 'jeep', 'airboat',
 ];
 
 const CRYPTID_TYPES = ['sasquatch', 'chupacabra', 'mothman'];
@@ -327,6 +329,60 @@ function spawnWildlife(rng, type, simTime) {
       base.life = rng.float(10, 20);
       base.hp = 99;
       break;
+    // New wildlife
+    case 'water_moccasin':
+      base.y = waterY + rng.float(1, 5);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(3, 6);
+      base.hp = 2;
+      break;
+    case 'pelican':
+      base.y = waterY - rng.float(20, 35);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(4, 7);
+      base.hp = 2;
+      base.diveTimer = rng.float(3, 8);
+      break;
+    case 'osprey':
+      base.y = rng.float(5, 20);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(6, 10);
+      base.hp = 2;
+      break;
+    case 'wild_boar':
+      base.y = waterY - rng.float(4, 10);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(5, 9);
+      base.hp = 4;
+      break;
+    case 'panther':
+      base.y = waterY - rng.float(5, 12);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(3, 6);
+      base.hp = 6;
+      base.life = rng.float(30, 50);
+      base.huntTimer = 0;
+      break;
+    case 'coyote':
+      base.y = waterY - rng.float(3, 8);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(5, 8);
+      base.hp = 3;
+      break;
+    case 'beaver':
+      base.y = waterY - rng.float(0, 3);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(1, 3);
+      base.hp = 2;
+      break;
+    // Vehicles
+    case 'jeep':
+      base.y = waterY - rng.float(5, 10);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(10, 15);
+      base.hp = 8;
+      base.life = rng.float(15, 30);
+      base.huntTimer = rng.float(2, 5);
+      break;
+    case 'airboat':
+      base.y = waterY + rng.float(1, 3);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(12, 18);
+      base.hp = 6;
+      base.life = rng.float(15, 30);
+      base.huntTimer = rng.float(2, 5);
+      break;
     // Hunters
     case 'hunter_foot':
       base.y = waterY - rng.float(4, 10);
@@ -373,10 +429,10 @@ function updateWildlife(dt, simTime, rng) {
   }
 
   // Human hunters — show up in boats or on foot
-  if (rng.chance(0.008 * dt)) {
-    const hunterCount = wildlife.filter(w => w.type === 'hunter_boat' || w.type === 'hunter_foot').length;
-    if (hunterCount < 2) {
-      const type = rng.pick(['hunter_boat', 'hunter_foot', 'hunter_foot']);
+  if (rng.chance(0.012 * dt)) {
+    const hunterCount = wildlife.filter(w => ['hunter_boat', 'hunter_foot', 'jeep', 'airboat'].includes(w.type)).length;
+    if (hunterCount < 3) {
+      const type = rng.pick(['hunter_boat', 'hunter_foot', 'hunter_foot', 'jeep', 'airboat']);
       wildlife.push(spawnWildlife(rng, type, simTime));
     }
   }
@@ -414,6 +470,15 @@ function updateWildlife(dt, simTime, rng) {
     mothman:     { prey: [], fears: [], speed: 4 },
     hunter_foot: { prey: [], fears: ['sasquatch'], speed: 5 }, // gator hunting handled separately
     hunter_boat: { prey: [], fears: [], speed: 7 },
+    water_moccasin: { prey: ['crawfish'], fears: ['heron_bg', 'egret'], speed: 7 },
+    pelican: { prey: [], fears: [], speed: 8 },
+    osprey: { prey: ['snake', 'water_moccasin', 'crawfish'], fears: [], speed: 12 },
+    wild_boar: { prey: ['snake', 'crawfish', 'armadillo'], fears: ['panther', 'hunter_foot', 'sasquatch'], speed: 9 },
+    panther: { prey: ['deer', 'wild_boar', 'raccoon', 'rabbit', 'opossum', 'coyote'], fears: ['hunter_foot'], speed: 14 },
+    coyote: { prey: ['rabbit', 'armadillo', 'opossum'], fears: ['panther', 'wild_boar', 'hunter_foot'], speed: 11 },
+    beaver: { prey: [], fears: ['snake', 'water_moccasin', 'chupacabra'], speed: 4 },
+    jeep: { prey: [], fears: [], speed: 12 },
+    airboat: { prey: [], fears: [], speed: 15 },
     alien: { prey: [], fears: [], speed: 5 }, // fights are handled specially
   };
 
@@ -578,6 +643,46 @@ function updateWildlife(dt, simTime, rng) {
       case 'mothman':
         w.y += Math.sin(simTime * 1 + i) * 2 * dt;
         break;
+      case 'water_moccasin':
+        if (w.y < waterY) w.y = waterY + 2;
+        w.y += Math.sin(simTime * 3 + i * 1.5) * 2 * dt;
+        break;
+      case 'pelican':
+        w.y += Math.sin(simTime * 1.2 + i * 2) * 2 * dt;
+        w.diveTimer = (w.diveTimer || 3) - dt;
+        if (w.diveTimer <= 0 && w.y < waterY - 10) {
+          w.vy = 25; // dive!
+          w.diveTimer = rng.float(5, 12);
+        }
+        if (w.y > waterY - 3) { w.vy = -15; } // pull back up
+        w.vy *= 0.95;
+        break;
+      case 'osprey':
+        w.y += Math.sin(simTime * 2 + i * 3) * 1.5 * dt;
+        break;
+      case 'wild_boar':
+        if (rng.chance(0.15 * dt)) w.vx *= rng.float(0.5, 1.8); // charge bursts
+        break;
+      case 'panther':
+        // Slow stalk, burst when near prey
+        w.vx *= 0.99;
+        if (rng.chance(0.05 * dt)) w.vx = Math.sign(w.vx || 1) * rng.float(2, 14);
+        break;
+      case 'coyote':
+        w.y += Math.sin(simTime * 5 + i) * 0.5 * dt; // trot bounce
+        break;
+      case 'beaver':
+        if (w.y < waterY - 2) w.y = waterY - 1;
+        w.y += Math.sin(simTime * 2 + i) * 0.3 * dt; // bob
+        break;
+      case 'jeep':
+        w.y += Math.sin(simTime * 15 + i) * 0.2 * dt; // engine rumble
+        if (w.y > waterY - 3) w.y = waterY - 3;
+        break;
+      case 'airboat':
+        if (w.y < waterY) w.y = waterY + 1;
+        w.y += Math.sin(simTime * 8 + i) * 0.3 * dt;
+        break;
       case 'hunter_foot':
       case 'hunter_boat':
         break; // handled below
@@ -614,13 +719,13 @@ function updateWildlife(dt, simTime, rng) {
     }
 
     // --- Gravity for land animals ---
-    if (['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien'].includes(w.type)) {
+    if (['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien', 'wild_boar', 'panther', 'coyote', 'jeep'].includes(w.type)) {
       w.vy = (w.vy || 0) + 15 * dt;
       if (w.y > waterY - 2) { w.y = waterY - 2; w.vy = Math.min(0, w.vy); }
     }
 
     // --- HUNTERS vs EVERYTHING ---
-    if (w.type === 'hunter_foot' || w.type === 'hunter_boat') {
+    if (['hunter_foot', 'hunter_boat', 'jeep', 'airboat'].includes(w.type)) {
       w.huntTimer = (w.huntTimer || 0) - dt;
       if (w.huntTimer <= 0) {
         // Find nearest target — gators preferred, but will shoot anything
@@ -705,7 +810,7 @@ function updateWildlife(dt, simTime, rng) {
     for (const [id, tr, gator] of world.query('transform', 'gator')) {
       if (gator.stage === 'egg' || gator.stage === 'hatchling') continue;
       if (CRYPTID_TYPES.includes(w.type)) continue;
-      if (['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat'].includes(w.type)) continue;
+      if (['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey'].includes(w.type)) continue;
       // Aliens fight back but can be eaten
 
       const sizeScale = gator.sizeScale || 1;
@@ -928,6 +1033,209 @@ function renderWildlife(ctx, simTime) {
         ctx.fillStyle = '#ccbbaa';
         ctx.fillRect(px + 2, py + 2, 2, 1);
         break;
+
+      // --- NEW WILDLIFE ---
+      case 'water_moccasin':
+        // Thick dark snake in water, cottonmouth open
+        ctx.fillStyle = '#2a1a0a';
+        for (let s = 0; s < 7; s++) {
+          const sy = Math.round(Math.sin(simTime * 4 + s * 0.8) * 1);
+          ctx.fillRect(px + (flipX ? -s : s), py + sy, 1, 1);
+        }
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillRect(px + (flipX ? -7 : 7), py, 1, 1);
+        // Cotton white mouth flash
+        if (Math.sin(simTime * 6 + w.x) > 0.7) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(px + (flipX ? -8 : 8), py, 1, 1);
+        }
+        break;
+      case 'pelican':
+        // Large white bird with big beak
+        ctx.fillStyle = '#eeeeee';
+        ctx.fillRect(px, py, 4, 3);
+        ctx.fillStyle = '#dddddd';
+        ctx.fillRect(px + 1, py, 2, 2);
+        // Big beak
+        ctx.fillStyle = '#ee9933';
+        ctx.fillRect(px + (flipX ? -2 : 4), py + 1, 3, 1);
+        ctx.fillStyle = '#dd8822';
+        ctx.fillRect(px + (flipX ? -2 : 4), py + 2, 2, 1); // pouch
+        // Wings
+        const pwing = Math.sin(simTime * 4 + w.x) > 0;
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(px - 1, py + (pwing ? -1 : 1), 1, 2);
+        ctx.fillRect(px + 4, py + (pwing ? -1 : 1), 1, 2);
+        break;
+      case 'osprey':
+        // Brown/white raptor
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(px, py, 3, 2);
+        ctx.fillStyle = '#eeeeee';
+        ctx.fillRect(px + 1, py + 1, 1, 1); // white belly
+        ctx.fillStyle = '#444444';
+        ctx.fillRect(px + (flipX ? -1 : 3), py, 1, 1); // beak
+        const owing = Math.sin(simTime * 7 + w.x) > 0;
+        ctx.fillStyle = '#4a2a0a';
+        ctx.fillRect(px - 1, py + (owing ? -1 : 0), 1, 1);
+        ctx.fillRect(px + 3, py + (owing ? -1 : 0), 1, 1);
+        break;
+      case 'wild_boar':
+        // Dark bristly body, lighter snout, tusks
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillRect(px, py, 5, 3);
+        ctx.fillStyle = '#4a3a2a';
+        ctx.fillRect(px + 1, py, 3, 2);
+        // Snout
+        ctx.fillStyle = '#8a6a4a';
+        ctx.fillRect(px + (flipX ? -1 : 5), py + 1, 1, 2);
+        // Tusks
+        ctx.fillStyle = '#eeeeee';
+        ctx.fillRect(px + (flipX ? -1 : 5), py + 2, 1, 1);
+        // Legs
+        ctx.fillStyle = '#2a1a0a';
+        ctx.fillRect(px + 1, py + 3, 1, 1);
+        ctx.fillRect(px + 3, py + 3, 1, 1);
+        // Bristle ridge
+        ctx.fillStyle = '#2a1a0a';
+        ctx.fillRect(px + 1, py - 1, 3, 1);
+        break;
+      case 'panther':
+        // Sleek black body, yellow eyes, long tail
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(px, py, 6, 2);
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(px + 1, py, 4, 1);
+        // Head
+        ctx.fillRect(px + (flipX ? -1 : 6), py - 1, 2, 2);
+        // Yellow eyes
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(px + (flipX ? -1 : 7), py - 1, 1, 1);
+        // Long tail
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(px + (flipX ? 6 : -1), py, 1, 1);
+        ctx.fillRect(px + (flipX ? 7 : -2), py - 1, 1, 1);
+        ctx.fillRect(px + (flipX ? 8 : -3), py - 1, 1, 1);
+        // Legs
+        ctx.fillRect(px + 1, py + 2, 1, 1);
+        ctx.fillRect(px + 4, py + 2, 1, 1);
+        break;
+      case 'coyote':
+        // Tan/sandy body, pointed ears
+        ctx.fillStyle = '#aa8855';
+        ctx.fillRect(px, py, 5, 2);
+        ctx.fillStyle = '#bb9966';
+        ctx.fillRect(px + 1, py, 3, 1);
+        // Head + ears
+        ctx.fillStyle = '#aa8855';
+        ctx.fillRect(px + (flipX ? -1 : 5), py - 1, 1, 2);
+        ctx.fillStyle = '#997744';
+        ctx.fillRect(px + (flipX ? -1 : 5), py - 2, 1, 1); // ear
+        // Bushy tail
+        ctx.fillStyle = '#aa8855';
+        ctx.fillRect(px + (flipX ? 5 : -1), py - 1, 1, 2);
+        ctx.fillRect(px + (flipX ? 6 : -2), py - 1, 1, 1);
+        // Legs
+        ctx.fillStyle = '#886633';
+        ctx.fillRect(px + 1, py + 2, 1, 1);
+        ctx.fillRect(px + 3, py + 2, 1, 1);
+        break;
+      case 'beaver':
+        // Brown body, flat tail, orange teeth
+        ctx.fillStyle = '#6a4a2a';
+        ctx.fillRect(px, py, 4, 2);
+        ctx.fillStyle = '#7a5a3a';
+        ctx.fillRect(px + 1, py, 2, 1);
+        // Flat tail
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(px + (flipX ? 4 : -2), py + 1, 2, 1);
+        // Head
+        ctx.fillRect(px + (flipX ? -1 : 4), py, 1, 2);
+        // Orange teeth
+        ctx.fillStyle = '#ff8844';
+        ctx.fillRect(px + (flipX ? -2 : 5), py + 1, 1, 1);
+        break;
+
+      // --- VEHICLES ---
+      case 'jeep': {
+        // Boxy olive body
+        ctx.fillStyle = '#6a7a4a';
+        ctx.fillRect(px, py, 8, 3);
+        ctx.fillStyle = '#7a8a5a';
+        ctx.fillRect(px + 1, py, 6, 2);
+        // Windshield
+        ctx.fillStyle = '#aaccdd';
+        ctx.fillRect(px + (flipX ? 1 : 5), py, 2, 1);
+        // Roll bar
+        ctx.fillStyle = '#444444';
+        ctx.fillRect(px + 2, py - 1, 1, 1);
+        ctx.fillRect(px + 5, py - 1, 1, 1);
+        ctx.fillRect(px + 2, py - 2, 4, 1);
+        // Wheels
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(px + 1, py + 3, 2, 2);
+        ctx.fillRect(px + 5, py + 3, 2, 2);
+        ctx.fillStyle = '#444444';
+        ctx.fillRect(px + 1, py + 3, 1, 1);
+        ctx.fillRect(px + 5, py + 3, 1, 1);
+        // Person
+        ctx.fillStyle = '#ddaa88';
+        ctx.fillRect(px + 3, py - 3, 1, 1); // head
+        ctx.fillStyle = '#556633';
+        ctx.fillRect(px + 3, py - 2, 1, 1); // body
+        // Headlight
+        ctx.fillStyle = '#ffff88';
+        ctx.fillRect(px + (flipX ? 0 : 7), py + 1, 1, 1);
+        // Muzzle flash
+        if (w.muzzleFlash && w.muzzleFlash > 0) {
+          ctx.fillStyle = '#ffff44';
+          ctx.fillRect(px + 3 + (flipX ? -3 : 3), py - 3, 2, 1);
+          w.muzzleFlash -= 0.016;
+        }
+        break;
+      }
+      case 'airboat': {
+        // Flat hull
+        ctx.fillStyle = '#888888';
+        ctx.fillRect(px, py, 9, 2);
+        ctx.fillStyle = '#999999';
+        ctx.fillRect(px + 1, py, 7, 1);
+        // Pointed bow
+        ctx.fillStyle = '#777777';
+        ctx.fillRect(px + (flipX ? -1 : 9), py, 2, 1);
+        // Fan cage (circle-ish)
+        ctx.fillStyle = '#666666';
+        const fanX = px + (flipX ? 8 : -1);
+        ctx.fillRect(fanX, py - 2, 3, 4);
+        ctx.fillStyle = '#555555';
+        ctx.fillRect(fanX + 1, py - 1, 1, 2); // fan center
+        // Fan blade spin
+        const blade = Math.sin(simTime * 20) > 0;
+        ctx.fillStyle = '#444444';
+        ctx.fillRect(fanX + (blade ? 0 : 1), py - 2 + (blade ? 0 : 1), blade ? 3 : 1, blade ? 1 : 2);
+        // Elevated seat + person
+        ctx.fillStyle = '#666666';
+        ctx.fillRect(px + 4, py - 2, 1, 2); // seat post
+        ctx.fillStyle = '#ddaa88';
+        ctx.fillRect(px + 4, py - 4, 1, 1); // head
+        ctx.fillStyle = '#886644';
+        ctx.fillRect(px + 4, py - 3, 1, 1); // body
+        // Water spray behind
+        if (Math.abs(w.vx) > 5) {
+          ctx.fillStyle = 'rgba(180, 220, 220, 0.4)';
+          const sprayDir = w.vx > 0 ? -1 : 1;
+          for (let sp = 0; sp < 4; sp++) {
+            ctx.fillRect(px + (sprayDir > 0 ? 10 : -1 - sp), py + 1 + Math.floor(Math.sin(simTime * 12 + sp) * 1), 1, 1);
+          }
+        }
+        // Muzzle flash
+        if (w.muzzleFlash && w.muzzleFlash > 0) {
+          ctx.fillStyle = '#ffff44';
+          ctx.fillRect(px + 4 + (flipX ? -2 : 2), py - 4, 2, 1);
+          w.muzzleFlash -= 0.016;
+        }
+        break;
+      }
 
       // --- CRYPTIDS ---
       case 'sasquatch':
@@ -1532,23 +1840,97 @@ function renderFires(ctx, simTime) {
   }
 }
 
-function dropFood(x, y) {
-  const type = y < waterY ? 'fly' : 'fish';
-  const config = PREY_TYPES[type];
-  const id = world.create();
-  world.add(id, 'transform', { x, y, vx: 0, vy: 0, direction: 1 });
-  world.add(id, 'prey', { type, alive: true, value: config.value, sprite: config.sprites[0], sprites: config.sprites, animTimer: 0, animFrame: 0, baseY: y, buzzTimer: 0 });
-  ripples.push({ x, y, radius: 0, maxRadius: 8, opacity: 1 });
-}
+// --- Cursor tracking for power glow ---
+let cursorX = -1, cursorY = -1;
 
-function triggerRain(x, y) {
-  // Boost rain intensity temporarily
-  env.weather = 'rain';
-  env.rainIntensity = 0.8;
-  env.weatherTimer = 15;
-  // Boost food spawning
-  env.foodMultiplier = 2.0;
-  ripples.push({ x, y, radius: 0, maxRadius: 15, opacity: 1 });
+function activatePower(x, y, type) {
+  switch (type) {
+    case 'food': {
+      const foodType = y < waterY ? 'fly' : 'fish';
+      const config = PREY_TYPES[foodType];
+      const id = world.create();
+      world.add(id, 'transform', { x, y, vx: 0, vy: 0, direction: 1 });
+      world.add(id, 'prey', { type: foodType, alive: true, value: config.value, sprite: config.sprites[0], sprites: config.sprites, animTimer: 0, animFrame: 0, baseY: y, buzzTimer: 0 });
+      ripples.push({ x, y, radius: 0, maxRadius: 8, opacity: 1 });
+      break;
+    }
+    case 'rain': {
+      env.weather = 'rain';
+      env.rainIntensity = 0.8;
+      env.weatherTimer = 15;
+      env.foodMultiplier = 2.0;
+      ripples.push({ x, y, radius: 0, maxRadius: 15, opacity: 1 });
+      break;
+    }
+    case 'scare': {
+      scarePredators(world, x, y, 60);
+      ripples.push({ x, y, radius: 0, maxRadius: 20, opacity: 1 });
+      break;
+    }
+    case 'lightning': {
+      // Spawn a lightning bolt at the given x position
+      const bolt = { x, segments: [], life: 0.3 };
+      let bx = x;
+      let by = 0;
+      while (by < waterY + 10) {
+        const nextX = bx + (Math.random() - 0.5) * 10;
+        const nextY = by + 5 + Math.random() * 10;
+        bolt.segments.push({ x1: bx, y1: by, x2: nextX, y2: nextY });
+        bx = nextX;
+        by = nextY;
+      }
+      events.lightningBolts.push(bolt);
+      events.lightningFlash = 1;
+      // Damage nearby gators slightly
+      for (const [id, tr, gator] of world.query('transform', 'gator')) {
+        if (Math.abs(tr.x + (gator.spriteW || 10) / 2 - x) < 6) {
+          if (Math.random() < 0.15) {
+            gator.health -= 0.5;
+            if (gator.health <= 0) world.kill(id);
+            break;
+          }
+        }
+      }
+      ripples.push({ x, y: waterY, radius: 0, maxRadius: 25, opacity: 1 });
+      break;
+    }
+    case 'heal': {
+      // Find nearest gator within 30px and heal it
+      let nearestId = null, nearestDist = 30, nearestTr = null, nearestGator = null;
+      for (const [id, tr, gator] of world.query('transform', 'gator')) {
+        const dx = tr.x - x, dy = tr.y - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestId = id;
+          nearestTr = tr;
+          nearestGator = gator;
+        }
+      }
+      if (nearestGator) {
+        nearestGator.health = Math.min(1, nearestGator.health + 0.3);
+        nearestGator.hunger = Math.max(0, nearestGator.hunger - 0.2);
+        // Spawn green heal particles
+        for (let i = 0; i < 6; i++) {
+          deathParticles.push({
+            x: nearestTr.x + (Math.random() - 0.5) * 8,
+            y: nearestTr.y - Math.random() * 6,
+            vx: (Math.random() - 0.5) * 10,
+            vy: -Math.random() * 12 - 3,
+            life: 0.5 + Math.random() * 0.5,
+            color: i % 2 === 0 ? '#44dd44' : '#88ff88',
+          });
+        }
+      }
+      ripples.push({ x, y, radius: 0, maxRadius: 10, opacity: 1 });
+      break;
+    }
+    case 'fire': {
+      startFire(x, y, rng);
+      ripples.push({ x, y, radius: 0, maxRadius: 12, opacity: 1 });
+      break;
+    }
+  }
 }
 
 function triggerScare(x, y) {
@@ -1557,9 +1939,9 @@ function triggerScare(x, y) {
 }
 
 createInputHandler(canvas, {
-  onDropFood: dropFood,
-  onRain: triggerRain,
+  onPower: activatePower,
   onScare: triggerScare,
+  onMove: (x, y) => { cursorX = x; cursorY = y; },
 });
 
 // --- Predator Rendering ---
@@ -1603,6 +1985,16 @@ function renderFullUI(ctx, simTime) {
   drawPixelText(ctx, `pop:${gatorCount}`, 2, CANVAS_H - 6);
   drawPixelText(ctx, `gen:${maxGeneration}`, 2, CANVAS_H - 13);
 
+  // Top left: current power indicator
+  const powerIdx = getCurrentPower();
+  const powerName = POWER_NAMES[powerIdx];
+  const powerColor = POWER_COLORS[powerIdx];
+  ctx.fillStyle = powerColor;
+  drawPixelText(ctx, `power:${powerName}`, 2, 3);
+  // Small key hint
+  ctx.fillStyle = '#556655';
+  drawPixelText(ctx, `[${powerIdx + 1}]`, 2 + (7 + powerName.length) * 4, 3);
+
   // Bottom right: seed and season
   const seedText = `seed:${seed.length > 12 ? seed.slice(-12) : seed}`;
   drawPixelText(ctx, seedText, CANVAS_W - seedText.length * 4 - 2, CANVAS_H - 6);
@@ -1618,6 +2010,17 @@ function renderFullUI(ctx, simTime) {
     const weatherText = env.weather;
     ctx.fillStyle = env.weather === 'storm' ? '#554444' : '#334433';
     drawPixelText(ctx, weatherText, CANVAS_W - weatherText.length * 4 - 2, CANVAS_H - 20);
+  }
+
+  // Cursor glow — subtle pulsing dot at mouse position in current power color
+  if (cursorX >= 0 && cursorY >= 0) {
+    const pulse = 0.4 + 0.3 * Math.sin(simTime * 5);
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = powerColor;
+    ctx.fillRect(cursorX - 1, cursorY - 1, 3, 3);
+    ctx.globalAlpha = pulse * 0.3;
+    ctx.fillRect(cursorX - 2, cursorY - 2, 5, 5);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -1702,8 +2105,10 @@ function gameLoop(timestamp) {
 
   renderSky(ctx, waterY, simTime);
   renderCelestial(ctx, env, waterY, simTime);
+  renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);
   renderWater(ctx, waterY, simTime);
+  renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
   renderVegetation(ctx, terrain, waterY, frameVegRng, simTime);
   renderPrey(ctx, world, simTime);
   renderGators(ctx, world);
