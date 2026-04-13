@@ -2,6 +2,7 @@
 
 import { CANVAS_W, CANVAS_H } from '../config.js';
 import { HERON_1 } from '../sprites/fauna-sprites.js';
+import { distance } from '../utils/math.js';
 
 const HERON_SPAWN_INTERVAL = 30; // seconds between potential spawns
 const HERON_SPEED = 18;
@@ -53,7 +54,7 @@ export function predatorSystem(world, dt, rng, waterY, simTime) {
         let bestDist = 80;
         for (const [gid, gtr, gator] of world.query('transform', 'gator')) {
           if (gator.stage !== 'hatchling') continue;
-          const dist = Math.sqrt((gtr.x - tr.x) ** 2 + (gtr.y - tr.y) ** 2);
+          const dist = distance(tr.x, tr.y, gtr.x, gtr.y);
           if (dist < bestDist) {
             bestDist = dist;
             bestTarget = { id: gid, tr: gtr };
@@ -86,7 +87,7 @@ export function predatorSystem(world, dt, rng, waterY, simTime) {
         // Dive toward target
         const dx = targetTr.x - tr.x;
         const dy = targetTr.y - tr.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(tr.x, tr.y, targetTr.x, targetTr.y);
 
         if (dist > 2) {
           tr.vx = (dx / dist) * SWOOP_SPEED;
@@ -153,7 +154,7 @@ function spawnHeron(world, rng, waterY) {
 // Scare predators in a radius (god power)
 export function scarePredators(world, x, y, radius = 50) {
   for (const [id, tr, pred] of world.query('transform', 'predator')) {
-    const dist = Math.sqrt((tr.x - x) ** 2 + (tr.y - y) ** 2);
+    const dist = distance(x, y, tr.x, tr.y);
     if (dist < radius) {
       pred.scared = true;
       pred.fleeDir = tr.x < x ? -1 : 1;

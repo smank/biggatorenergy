@@ -1,6 +1,8 @@
 // Breeding system — courtship, mating, nesting, egg incubation, hatching
 
 import { GATOR_STAGES } from '../sprites/gator-sprites.js';
+import { blendColors } from '../utils/colors.js';
+import { distance } from '../utils/math.js';
 
 const MATE_COOLDOWN = 25;       // seconds between mating attempts
 const PREGNANCY_DURATION = 10;  // seconds of pregnancy
@@ -47,7 +49,7 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
       // Move toward female
       const dx = femaleTr.x - tr.x;
       const dy = femaleTr.y - tr.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(tr.x, tr.y, femaleTr.x, femaleTr.y);
       const speed = (gator.traits?.speed || 1) * 6;
 
       if (dist > 5) {
@@ -223,9 +225,7 @@ function findMate(world, myId, myTr, myGator) {
     if ((gator.mateCooldown || 0) > 0) continue;
     if (gator.state === 'mating' || gator.state === 'courting') continue;
 
-    const dx = tr.x - myTr.x;
-    const dy = tr.y - myTr.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(myTr.x, myTr.y, tr.x, tr.y);
 
     if (dist < bestDist) {
       bestDist = dist;
@@ -263,30 +263,4 @@ export function inheritTraits(parentA, parentB, rng) {
   return traits;
 }
 
-function blendColors(hexA, hexB, rng) {
-  if (!hexA || !hexB) return hexA || hexB || '#4a8c2a';
-  const a = hexToRgb(hexA);
-  const b = hexToRgb(hexB);
-  const blend = rng.random();
-  const r = Math.round(a.r * blend + b.r * (1 - blend));
-  const g = Math.round(a.g * blend + b.g * (1 - blend));
-  const bl = Math.round(a.b * blend + b.b * (1 - blend));
-  // Slight mutation
-  const mr = rng.chance(0.1) ? rng.range(-15, 15) : 0;
-  const mg = rng.chance(0.1) ? rng.range(-15, 15) : 0;
-  const mb = rng.chance(0.1) ? rng.range(-15, 15) : 0;
-  return rgbToHex(
-    Math.max(0, Math.min(255, r + mr)),
-    Math.max(0, Math.min(255, g + mg)),
-    Math.max(0, Math.min(255, bl + mb))
-  );
-}
-
-function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-function rgbToHex(r, g, b) {
-  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
-}
+// Color utilities imported from utils/colors.js

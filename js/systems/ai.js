@@ -2,6 +2,7 @@
 // States: idle, wandering, hunting, eating, sleeping, courting, mating, nesting, guarding, fighting, fleeing, dying
 
 import { CANVAS_W } from '../config.js';
+import { distance } from '../utils/math.js';
 
 function transition(gator, state, rng) {
   gator.state = state;
@@ -33,9 +34,7 @@ function findNearestPrey(world, x, y, range) {
 
   for (const [id, tr, prey] of world.query('transform', 'prey')) {
     if (!prey.alive) continue;
-    const dx = tr.x - x;
-    const dy = tr.y - y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(x, y, tr.x, tr.y);
     if (dist < nearestDist) {
       nearestDist = dist;
       nearest = { id, tr, prey, dist };
@@ -166,7 +165,7 @@ export function aiSystem(world, dt, rng, waterY) {
         // Move toward prey
         const dx = prey.tr.x - tr.x;
         const dy = prey.tr.y - tr.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(tr.x, tr.y, prey.tr.x, prey.tr.y);
         const speed = (gator.traits?.speed || 1) * 15;
 
         if (dist > 1) {

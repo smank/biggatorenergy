@@ -72,7 +72,10 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
         ufo.beamOn = true;
         if (ufo.timer <= 0) {
           ufo.phase = 'abduct';
-          ufo.timer = 2.5;
+          ufo.timer = 5; // longer struggle window
+          ufo.struggleProgress = 0; // 0 = ground, 1 = fully abducted
+          ufo.beamStrength = rng.float(0.4, 0.9); // UFO tractor beam power
+          ufo.shakeIntensity = 0;
           // Find nearest gator — wide search
           const gators = world.query('transform', 'gator');
           let closest = null;
@@ -87,59 +90,141 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           }
           if (closest) {
             ufo.victimId = closest.id;
-            // Move UFO over the victim
             ufo.targetX = closest.tr.x;
+            ufo.victimStartY = closest.tr.y;
           }
         }
         break;
-      case 'abduct':
+      case 'abduct': {
         ufo.beamOn = true;
         // Drift over target
         if (ufo.targetX) {
           ufo.x += (ufo.targetX - ufo.x) * dt * 1.5;
         }
-        // Pull victim up
+
         if (ufo.victimId !== null) {
           const victimTr = world.get(ufo.victimId, 'transform');
-          if (victimTr) {
-            victimTr.y -= 20 * dt;
-            victimTr.x += (ufo.x - victimTr.x) * dt * 3;
-            victimTr.vx = 0;
-            victimTr.vy = 0;
-            if (victimTr.y < ufo.y + 5) {
-              world.kill(ufo.victimId);
-              ufo.victimId = null;
-              ufo.abducted = true;
-            }
-          } else {
-            ufo.victimId = null; // victim already dead
+          const victimGator = world.get(ufo.victimId, 'gator');
+
+          if (!victimTr || !victimGator) {
+            ufo.victimId = null;
+            ufo.phase = 'depart';
+            ufo.beamOn = false;
+            ufo.timer = 3;
+            break;
           }
+
+          // --- TUG OF WAR ---
+          // Gator resistance based on size, strength, aggression
+          const gatorSize = victimGator.sizeScale || 1;
+          const gatorStage = victimGator.stage;
+          const stageWeight = { hatchling: 0.2, juvenile: 0.5, adult: 1.0, elder: 1.3 };
+          const weight = (stageWeight[gatorStage] || 1) * gatorSize;
+          const aggression = victimGator.traits?.aggression || 0.5;
+          const gatorResistance = weight * (0.5 + aggression * 0.5);
+
+          // Beam pulls up, gator resists — each frame is a dice roll
+          const pullForce = ufo.beamStrength;
+          const resistForce = gatorResistance * rng.float(0.3, 1.2); // luck factor
+          const netForce = pullForce - resistForce * 0.7;
+
+          ufo.struggleProgress += netForce * dt * 0.15;
+          ufo.struggleProgress = Math.max(0, Math.min(1, ufo.struggleProgress));
+
+          // Visual: gator position interpolated between ground and UFO
+          const groundY = ufo.victimStartY || (waterY - 4);
+          victimTr.y = groundY + (ufo.y + 5 - groundY) * ufo.struggleProgress;
+          victimTr.x += (ufo.x - victimTr.x) * dt * 2 * ufo.struggleProgress;
+          victimTr.vx = 0;
+          victimTr.vy = 0;
+
+          // Shake intensity increases with struggle
+          ufo.shakeIntensity = Math.min(3, ufo.struggleProgress * 4 + (1 - ufo.struggleProgress) * 2);
+          // Apply shake to UFO position
+          ufo.x += Math.sin(simTime * 20) * ufo.shakeIntensity * 0.3;
+          ufo.y += Math.cos(simTime * 25) * ufo.shakeIntensity * 0.2;
+
+          // === OUTCOME CHECK ===
+          if (ufo.struggleProgress >= 1) {
+            // ABDUCTION SUCCESS — gator taken
+            world.kill(ufo.victimId);
+            ufo.victimId = null;
+            ufo.abducted = true;
+            ufo.phase = 'depart';
+            ufo.beamOn = false;
+            ufo.timer = 3;
+          } else if (ufo.struggleProgress <= 0 && ufo.timer < 3) {
+            // GATOR WINS — breaks free! UFO loses grip
+            victimTr.y = groundY;
+            victimTr.vy = 0;
+            // Gator is angry and energized
+            victimGator.state = 'idle';
+            victimGator.stateTimer = 2;
+            victimGator.energy = Math.min(1, victimGator.energy + 0.3);
+            ufo.victimId = null;
+            // UFO might crash from the strain
+            if (rng.chance(0.4)) {
+              ufo.phase = 'crashing';
+              ufo.crashVx = rng.float(-15, 15);
+              ufo.beamOn = false;
+            } else {
+              ufo.phase = 'depart';
+              ufo.beamOn = false;
+              ufo.timer = 3;
+            }
+          }
+        } else {
+          // No victim, just leave
+          ufo.phase = 'depart';
+          ufo.beamOn = false;
+          ufo.timer = 3;
         }
+
+        ufo.timer -= dt;
         if (ufo.timer <= 0) {
+          // Time's up — whatever state we're in, resolve it
+          if (ufo.victimId !== null) {
+            const victimTr = world.get(ufo.victimId, 'transform');
+            if (victimTr) {
+              if (ufo.struggleProgress > 0.6) {
+                // Close enough — abduction succeeds at the last moment
+                world.kill(ufo.victimId);
+                ufo.abducted = true;
+              } else {
+                // Gator drops back down
+                victimTr.y = ufo.victimStartY || (waterY - 4);
+                victimTr.vy = 5; // falls
+              }
+            }
+            ufo.victimId = null;
+          }
           ufo.phase = 'depart';
           ufo.beamOn = false;
           ufo.timer = 3;
         }
         break;
+      }
       case 'depart':
         ufo.y -= 25 * dt;
         ufo.x += 15 * dt;
-        // Chance to malfunction and crash!
-        if (!ufo.crashChecked && rng.chance(0.35)) {
-          ufo.phase = 'crashing';
-          ufo.crashVx = rng.float(-15, 15);
-          ufo.beamOn = false;
+        // Chance to malfunction and crash — higher if carrying a gator
+        if (!ufo.crashChecked) {
+          const crashChance = ufo.abducted ? 0.45 : 0.25;
+          if (rng.chance(crashChance)) {
+            ufo.phase = 'crashing';
+            ufo.crashVx = rng.float(-15, 15);
+            ufo.beamOn = false;
+          }
           ufo.crashChecked = true;
-          break;
+          if (ufo.phase === 'crashing') break;
         }
-        ufo.crashChecked = true;
         if (ufo.y < -20) {
           events.ufo = null;
         }
         break;
       case 'crashing': {
-        // UFO spiraling down, smoking
-        ufo.y += 18 * dt;
+        // UFO spiraling down, smoking — slow dramatic descent
+        ufo.y += 10 * dt;
         ufo.x += ufo.crashVx * dt;
         ufo.crashVx *= 0.98;
         ufo.crashSpin = (ufo.crashSpin || 0) + dt * 8;
@@ -156,13 +241,17 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
         // Hit ground
         if (ufo.y > waterY - 5) {
           ufo.phase = 'crashed';
-          ufo.timer = 0.5;
+          ufo.timer = 8; // wreckage stays visible for a while
           ufo.crashX = ufo.x;
           ufo.crashY = waterY - 3;
           events.lightningFlash = 0.8; // impact flash
-          // Spawn alien survivor
+          if (events.onExplosion) events.onExplosion();
+          // Spawn alien survivors — 1 to 3 crawl out of the wreckage
           if (events.onAlienSurvive) {
-            events.onAlienSurvive(ufo.x, waterY - 4, rng);
+            const numAliens = rng.range(1, 3);
+            for (let a = 0; a < numAliens; a++) {
+              events.onAlienSurvive(ufo.x + rng.float(-8, 8), waterY - 4, rng);
+            }
           }
           // Crash starts a fire
           if (events.onStartFire) {
@@ -517,6 +606,7 @@ function spawnLightning(events, rng, waterY, world) {
 
   events.lightningBolts.push(bolt);
   events.lightningFlash = 1;
+  if (events.onThunder) events.onThunder();
 
   // Lightning can kill a gator (rare tragedy)
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
