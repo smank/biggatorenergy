@@ -60,5 +60,5 @@ jobs:
             docker pull ${{ steps.image.outputs.name }}:latest
             docker stop biggatorenergy || true
             docker rm biggatorenergy || true
-            docker run -d --name biggatorenergy --restart unless-stopped -p 3333:80 ${{ steps.image.outputs.name }}:latest
+            docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 ${{ steps.image.outputs.name }}:latest
             docker image prune -f
