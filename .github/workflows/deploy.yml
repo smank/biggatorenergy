@@ -1,4 +1,4 @@
-name: Deploy
+name: Build & Deploy
 
 on:
   push:
@@ -51,14 +51,19 @@ jobs:
         run: echo "name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: smank
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            docker pull ${{ steps.image.outputs.name }}:latest
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new smank@"$HOST" << EOF
+            docker pull ${IMAGE}:latest
             docker stop biggatorenergy || true
             docker rm biggatorenergy || true
-            docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 ${{ steps.image.outputs.name }}:latest
+            docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 ${IMAGE}:latest
             docker image prune -f
+          EOF
