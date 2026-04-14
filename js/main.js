@@ -47,6 +47,36 @@ if (startOverlay) {
 document.addEventListener('keydown', () => resumeAudio(), { once: true });
 document.addEventListener('touchstart', () => resumeAudio(), { once: true });
 
+// --- Orientation Detection ---
+// JS-based because CSS media queries fail in Instagram/TikTok/Facebook/Twitter in-app browsers
+const rotatePrompt = document.getElementById('rotate-prompt');
+
+function checkOrientation() {
+  // Use window dimensions — most reliable across all browsers including in-app webviews
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  const h = window.innerHeight || document.documentElement.clientHeight;
+  const isPortrait = h > w && w < 768;
+
+  if (isPortrait) {
+    document.body.classList.add('show-rotate');
+    if (rotatePrompt) rotatePrompt.classList.add('visible');
+  } else {
+    document.body.classList.remove('show-rotate');
+    if (rotatePrompt) rotatePrompt.classList.remove('visible');
+  }
+}
+
+checkOrientation();
+window.addEventListener('resize', checkOrientation);
+// screen.orientation API — works on Android, some in-app browsers
+if (screen.orientation) {
+  screen.orientation.addEventListener('change', checkOrientation);
+}
+// Fallback for iOS and older browsers
+window.addEventListener('orientationchange', checkOrientation);
+// In-app browsers sometimes fire this late — recheck after a delay
+window.addEventListener('load', () => setTimeout(checkOrientation, 500));
+
 // --- Terrain ---
 const waterY = Math.floor(CANVAS_H * WATER_LINE);
 const terrain = generateTerrain(rng);
