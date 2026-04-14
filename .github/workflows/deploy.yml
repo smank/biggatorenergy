@@ -7,33 +7,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Deploy to VPS
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
+      - name: Deploy
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude '.claude' \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            ./ smank@"$HOST":/srv/biggatorenergy/
-
-          ssh -i ~/.ssh/deploy_key smank@"$HOST" << 'EOF'
-            cd /srv/biggatorenergy
-            docker build -t biggatorenergy .
-            docker stop biggatorenergy || true
-            docker rm biggatorenergy || true
-            docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 biggatorenergy
-            docker image prune -f
-          EOF
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          ssh-keyscan -t ed25519 ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/key smank@${{ secrets.DEPLOY_HOST }} 'cd /srv/biggatorenergy && git pull && docker build -t biggatorenergy . && docker stop biggatorenergy; docker rm biggatorenergy; docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 biggatorenergy && docker image prune -f'
