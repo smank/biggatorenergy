@@ -11,18 +11,26 @@ let rainNode = null;
 let rainGain = null;
 
 export function initAudio() {
-  if (ctx) return;
-  ctx = new (window.AudioContext || window.webkitAudioContext)();
-  masterGain = ctx.createGain();
-  masterGain.gain.value = 0.3;
-  masterGain.connect(ctx.destination);
+  // No-op — actual init happens in resumeAudio on first user gesture
+  // iOS requires AudioContext creation inside a touch/click handler
 }
 
 export function resumeAudio() {
-  if (ctx && ctx.state === 'suspended') {
+  // Create context on first user interaction (iOS requirement)
+  if (!ctx) {
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.3;
+      masterGain.connect(ctx.destination);
+    } catch (e) {
+      return; // audio not supported
+    }
+  }
+  if (ctx.state === 'suspended') {
     ctx.resume();
   }
-  if (!started && ctx) {
+  if (!started) {
     started = true;
     startAmbientDrone();
   }

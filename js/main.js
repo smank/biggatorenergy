@@ -34,18 +34,18 @@ ctx.imageSmoothingEnabled = false;
 // Audio — init and start on overlay click
 initAudio();
 const startOverlay = document.getElementById('start-overlay');
-if (startOverlay) {
-  startOverlay.addEventListener('click', () => {
-    resumeAudio();
-    startOverlay.classList.add('hidden');
-  });
-  startOverlay.addEventListener('touchstart', () => {
-    resumeAudio();
-    startOverlay.classList.add('hidden');
-  });
+function enterSwamp() {
+  resumeAudio();
+  if (startOverlay) startOverlay.classList.add('hidden');
 }
-// Fallback for keyboard
+if (startOverlay) {
+  // touchend is more reliable than touchstart for iOS audio unlock
+  startOverlay.addEventListener('touchend', (e) => { e.preventDefault(); enterSwamp(); }, { once: true });
+  startOverlay.addEventListener('click', enterSwamp, { once: true });
+}
+// Fallback — any interaction unlocks audio
 document.addEventListener('keydown', () => resumeAudio(), { once: true });
+document.addEventListener('touchstart', () => resumeAudio(), { once: true });
 
 // --- Terrain ---
 const waterY = Math.floor(CANVAS_H * WATER_LINE);
