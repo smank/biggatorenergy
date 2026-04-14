@@ -23,6 +23,7 @@ canvas#game {
   cursor: crosshair;
 }
 
+/* --- Start overlay --- */
 #start-overlay {
   position: fixed;
   top: 0;
@@ -50,7 +51,63 @@ canvas#game {
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* --- Rotate prompt (mobile portrait only) --- */
+#rotate-prompt {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #0a0a12;
+  z-index: 20;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+#rotate-icon {
+  font-size: 48px;
+  color: #4a6a4a;
+  animation: rock 2s ease-in-out infinite;
+}
+
+#rotate-text {
+  color: #4a6a4a;
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 3px;
+  text-transform: lowercase;
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  #rotate-prompt {
+    display: flex;
+  }
+  canvas#game {
+    display: none;
+  }
+  #start-overlay {
+    display: none;
+  }
+}
+
+/* Landscape mobile — fullscreen, no browser chrome distractions */
+@media (max-height: 500px) and (orientation: landscape) {
+  canvas#game {
+    width: 100dvw;
+    height: 100dvh;
+  }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
+}
+
+@keyframes rock {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(25deg); }
+  75% { transform: rotate(-25deg); }
 }
