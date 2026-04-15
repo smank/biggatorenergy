@@ -150,10 +150,10 @@ const env = createEnvironment();
 // --- Vegetation Growth State ---
 // The swamp becomes grander over time. Starts modest, grows into something epic.
 const vegState = {
-  growth: 0.5,       // 0-3, overall vegetation multiplier
-  treeGrowth: 0.5,   // tree canopy fullness — caps grow higher over time
-  flowerBloom: 0.3,  // flower density
-  undergrowth: 0.5,  // grass/fern density
+  growth: 0.8,       // 0-3, overall vegetation multiplier — start with a living swamp
+  treeGrowth: 0.7,   // tree canopy fullness
+  flowerBloom: 0.5,  // flower density
+  undergrowth: 0.7,  // grass/fern density
   age: 0,            // total sim-seconds lived — drives epoch transitions
   epoch: 0,          // 0=nascent, 1=established, 2=flourishing, 3=ancient, 4=primordial
   orchidChance: 0,   // orchids only bloom in mature swamps
@@ -175,23 +175,25 @@ function updateVegGrowth(dt) {
     vegState.maxGrowth = 1.2 + newEpoch * 0.5; // 1.2 -> 1.7 -> 2.2 -> 2.7 -> 3.2
   }
 
+  // Growth rates are very small — changes should be imperceptible moment-to-moment
+  // You notice the swamp has changed, not that it's changing
   const seasonGrowthRate = {
-    spring: 0.01,
-    summer: 0.005,
-    autumn: -0.002,
-    winter: -0.004,
+    spring: 0.002,
+    summer: 0.001,
+    autumn: -0.0005,
+    winter: -0.001,
   };
   const rate = seasonGrowthRate[env.season] || 0;
-  const weatherMod = env.weather === 'rain' ? 1.5 : env.weather === 'storm' ? 0.8 : env.weather === 'clear' ? 0.7 : 1.0;
-  const fireDamage = fireState.fires.length * -0.01;
+  const weatherMod = env.weather === 'rain' ? 1.3 : env.weather === 'storm' ? 0.9 : env.weather === 'clear' ? 0.8 : 1.0;
+  const fireDamage = fireState.fires.length * -0.003;
 
-  // Slow but relentless baseline growth — the swamp always wants to expand
-  const baseGrowth = 0.001 * (1 + vegState.epoch * 0.3);
+  // Tiny baseline growth — the swamp inches forward
+  const baseGrowth = 0.0003 * (1 + vegState.epoch * 0.2);
 
-  vegState.growth = Math.max(0.2, Math.min(vegState.maxGrowth, vegState.growth + (rate * weatherMod + fireDamage + baseGrowth) * dt));
-  vegState.treeGrowth = Math.max(0.3, Math.min(vegState.maxGrowth * 0.9, vegState.treeGrowth + (rate * 0.5 * weatherMod + baseGrowth * 0.8) * dt));
-  vegState.flowerBloom = Math.max(0, Math.min(vegState.maxGrowth, vegState.flowerBloom + (rate * 1.5 * weatherMod + baseGrowth) * dt));
-  vegState.undergrowth = Math.max(0.1, Math.min(vegState.maxGrowth, vegState.undergrowth + (rate * weatherMod + baseGrowth) * dt));
+  vegState.growth = Math.max(0.3, Math.min(vegState.maxGrowth, vegState.growth + (rate * weatherMod + fireDamage + baseGrowth) * dt));
+  vegState.treeGrowth = Math.max(0.4, Math.min(vegState.maxGrowth * 0.9, vegState.treeGrowth + (rate * 0.4 * weatherMod + baseGrowth * 0.5) * dt));
+  vegState.flowerBloom = Math.max(0.1, Math.min(vegState.maxGrowth, vegState.flowerBloom + (rate * 0.8 * weatherMod + baseGrowth) * dt));
+  vegState.undergrowth = Math.max(0.2, Math.min(vegState.maxGrowth, vegState.undergrowth + (rate * 0.6 * weatherMod + baseGrowth) * dt));
 
   // Orchids only appear in established+ swamps, bloom chance increases with age
   vegState.orchidChance = vegState.epoch >= 1 ? Math.min(1, (vegState.epoch - 1) * 0.25 + vegState.flowerBloom * 0.1) : 0;
