@@ -2,8 +2,22 @@
 
 import { CANVAS_W, CANVAS_H } from '../config.js';
 
-export function physicsSystem(world, dt, terrain, waterY) {
+export function physicsSystem(world, dt, terrain, waterY, rng) {
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
+    // Slip on mud — gators near the waterline can lose their footing
+    if (gator.slipping) {
+      gator.slipTimer -= dt;
+      tr.vx *= 1.5;
+      if (gator.slipTimer <= 0) {
+        gator.slipping = false;
+      }
+    } else if (rng && Math.abs(tr.vx) > 3 && Math.abs(tr.y + (gator.spriteH || 8) - waterY) < 3) {
+      if (rng.chance(0.005 * dt)) {
+        gator.slipping = true;
+        gator.slipTimer = 0.5;
+      }
+    }
+
     // Apply velocity
     tr.x += tr.vx * dt;
     tr.y += tr.vy * dt;

@@ -711,7 +711,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
 
 // --- Entity Rendering ---
 
-export function renderGators(ctx, world) {
+export function renderGators(ctx, world, simTime) {
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
     const stageData = GATOR_STAGES[gator.stage];
     if (!stageData) continue;
@@ -730,7 +730,7 @@ export function renderGators(ctx, world) {
     // Scale factor based on meals eaten — gators can get MASSIVE
     const scale = gator.sizeScale || 1;
     const drawX = Math.floor(tr.x);
-    const drawY = Math.floor(tr.y + (gator.breatheOffset || 0));
+    const drawY = Math.floor(tr.y + (gator.breatheOffset || 0)) + (gator.slipping ? 1 : 0);
 
     if (scale > 1.05) {
       drawScaledSprite(ctx, sprite, drawX, drawY, tr.direction === -1, tints, scale);
@@ -771,6 +771,51 @@ export function renderGators(ctx, world) {
         }
       }
       if (gator.glowTimer <= 0) gator.glowing = false;
+    }
+
+    // Golden gator shimmer overlay
+    if (gator.golden) {
+      const glowScale = scale > 1.05 ? scale : 1;
+      const flipX = tr.direction === -1;
+      for (let py = 0; py < sprite.length; py++) {
+        const row = sprite[py];
+        for (let px = 0; px < row.length; px++) {
+          if (!row[px]) continue;
+          const dx = flipX ? (row.length - 1 - px) : px;
+          const sx = Math.floor(drawX + dx * glowScale);
+          const sy = Math.floor(drawY + py * glowScale);
+          const sz = Math.max(1, Math.ceil(glowScale));
+          const alpha = 0.15 + Math.sin(Date.now() * 0.004 + px) * 0.1;
+          ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+          ctx.fillRect(sx, sy, sz, sz);
+        }
+      }
+    }
+
+    // Baby gators ride on mother's back
+    if (gator.sex === 'female' && gator.stage === 'adult' && simTime !== undefined) {
+      for (const [hid, htr, hgator] of world.query('transform', 'gator')) {
+        if (hid === id) continue;
+        if (hgator.stage !== 'hatchling') continue;
+        const dist = Math.sqrt((htr.x - tr.x) ** 2 + (htr.y - tr.y) ** 2);
+        if (dist < 10) {
+          // Draw hatchling on mother's back
+          const hStageData = GATOR_STAGES['hatchling'];
+          if (!hStageData) continue;
+          const hSprite = hStageData[hgator.frame || 'idle'] || hStageData.idle;
+          if (!hSprite) continue;
+          const hTints = hgator.traits ? {
+            body: hgator.traits.bodyColor || TINT_COLORS.body,
+            belly: hgator.traits.bellyColor || TINT_COLORS.belly,
+            dark: hgator.traits.darkColor || TINT_COLORS.dark,
+            scute: hgator.traits.scuteColor || TINT_COLORS.scute,
+          } : null;
+          const bobY = Math.sin(simTime * 3 + hid) * 0.8;
+          const rideX = drawX + Math.floor((gator.spriteW || 20) * scale * 0.3);
+          const rideY = drawY - 3 + Math.floor(bobY);
+          drawSprite(ctx, hSprite, rideX, rideY, tr.direction === -1, hTints);
+        }
+      }
     }
   }
 }

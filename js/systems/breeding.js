@@ -140,6 +140,7 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
       for (const [otherId, otherTr, otherGator] of world.query('transform', 'gator')) {
         if (otherId === id) continue;
         if (otherGator.sex !== 'male' || otherGator.stage !== 'adult') continue;
+        if (otherGator.golden) continue; // don't challenge the golden gator
 
         const dist = Math.abs(otherTr.x - tr.x);
         if (dist < 15) {
@@ -225,10 +226,13 @@ function findMate(world, myId, myTr, myGator) {
     if ((gator.mateCooldown || 0) > 0) continue;
     if (gator.state === 'mating' || gator.state === 'courting') continue;
 
-    const dist = distance(myTr.x, myTr.y, tr.x, tr.y);
+    let dist = distance(myTr.x, myTr.y, tr.x, tr.y);
 
-    if (dist < bestDist) {
-      bestDist = dist;
+    // Golden gators are preferred mates — effectively doubles attractiveness
+    const effectiveDist = gator.golden ? dist * 0.5 : dist;
+
+    if (effectiveDist < bestDist) {
+      bestDist = effectiveDist;
       best = { id, tr, gator, dist };
     }
   }

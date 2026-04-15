@@ -104,7 +104,7 @@ export function aiSystem(world, dt, rng, waterY) {
       case 'idle': {
         tr.vx *= 0.9; // slow to stop
         if (gator.stateTimer <= 0) {
-          if (gator.hunger > 0.5) {
+          if (gator.hunger > 0.3) {
             transition(gator, 'hunting', rng);
           } else if (gator.energy < 0.3) {
             transition(gator, 'sleeping', rng);
@@ -135,9 +135,9 @@ export function aiSystem(world, dt, rng, waterY) {
           transition(gator, 'idle', rng);
         }
 
-        // Opportunistic hunting
-        if (gator.hunger > 0.4) {
-          const prey = findNearestPrey(world, tr.x, tr.y, 40);
+        // Opportunistic hunting — gators are always looking for a meal
+        if (gator.hunger > 0.2) {
+          const prey = findNearestPrey(world, tr.x, tr.y, 50);
           if (prey) {
             gator.targetId = prey.id;
             transition(gator, 'hunting', rng);

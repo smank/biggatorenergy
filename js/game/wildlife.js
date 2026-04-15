@@ -458,7 +458,14 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
         break;
       case 'hunter_foot':
       case 'hunter_boat':
-        break; // handled below
+        // Fleeing with flailing arms after losing a fight
+        if (w.fleeing) {
+          w.fleeTimer -= dt;
+          w.vx = Math.sign(w.vx || 1) * Math.abs(w.vx) * 1.02; // accelerate away
+          if (Math.abs(w.vx) < 8) w.vx = Math.sign(w.vx || 1) * 8; // minimum flee speed
+          if (w.fleeTimer <= 0) w.fleeing = false;
+        }
+        break;
       case 'alien': {
         // Panicked alien with raygun — aggressive, dangerous
         w.raygunTimer = (w.raygunTimer || 0) - dt;
@@ -604,7 +611,13 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
                 // Target fights back — hunter takes damage
                 w.hp -= 1;
                 spawnDeathParticles(particles, w.x, w.y);
-                if (w.hp <= 0) w.alive = false;
+                if (w.hp <= 0) {
+                  w.alive = false;
+                } else {
+                  // Hunter flees with flailing arms
+                  w.fleeing = true;
+                  w.fleeTimer = 3;
+                }
                 w.vx *= -2; // knocked back
               }
             }
@@ -1146,17 +1159,30 @@ export function renderWildlife(ctx, state, simTime) {
         ctx.fillStyle = '#445533';
         ctx.fillRect(px, py + 4, 1, 2);
         ctx.fillRect(px + 1, py + 4, 1, 2);
-        // Gun
-        ctx.fillStyle = '#333333';
-        const gunDir = flipX ? -1 : 1;
-        ctx.fillRect(px + (flipX ? -2 : 2), py + 1, 3, 1);
-        // Muzzle flash
-        if (w.muzzleFlash && w.muzzleFlash > 0) {
-          ctx.fillStyle = '#ffff44';
-          ctx.fillRect(px + (flipX ? -3 : 5), py, 2, 2);
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(px + (flipX ? -4 : 6), py + 1, 1, 1);
-          w.muzzleFlash -= 0.016;
+        if (w.fleeing) {
+          // Flailing arms — alternate up/down rapidly
+          const armUp = Math.sin(simTime * 15) > 0;
+          ctx.fillStyle = '#ddaa88'; // skin tone arms
+          if (armUp) {
+            ctx.fillRect(px - 1, py - 1, 1, 1); // left arm up
+            ctx.fillRect(px + 2, py + 2, 1, 1); // right arm down
+          } else {
+            ctx.fillRect(px - 1, py + 2, 1, 1); // left arm down
+            ctx.fillRect(px + 2, py - 1, 1, 1); // right arm up
+          }
+        } else {
+          // Gun
+          ctx.fillStyle = '#333333';
+          const gunDir = flipX ? -1 : 1;
+          ctx.fillRect(px + (flipX ? -2 : 2), py + 1, 3, 1);
+          // Muzzle flash
+          if (w.muzzleFlash && w.muzzleFlash > 0) {
+            ctx.fillStyle = '#ffff44';
+            ctx.fillRect(px + (flipX ? -3 : 5), py, 2, 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(px + (flipX ? -4 : 6), py + 1, 1, 1);
+            w.muzzleFlash -= 0.016;
+          }
         }
         break;
       }

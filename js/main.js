@@ -13,7 +13,7 @@ import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, rende
 import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
-import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted } from './audio.js';
+import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
@@ -324,7 +324,7 @@ function spawnGator(rng, stage = 'adult') {
     direction: rng.chance(0.5) ? 1 : -1,
   });
 
-  world.add(id, 'gator', {
+  const gatorComp = {
     stage, frame: 'idle',
     spriteW: stageData.width, spriteH: stageData.height,
     sex: rng.chance(0.5) ? 'male' : 'female',
@@ -337,7 +337,18 @@ function spawnGator(rng, stage = 'adult') {
       aggression: rng.float(0.2, 0.8), fertility: rng.float(0.3, 0.7),
       metabolism: rng.float(0.7, 1.3), ...colors,
     },
-  });
+  };
+
+  // Golden gator — 1-in-100 chance
+  if (rng.chance(0.01)) {
+    gatorComp.golden = true;
+    gatorComp.traits.darkColor = '#8a7a20';
+    gatorComp.traits.bodyColor = '#ccaa30';
+    gatorComp.traits.bellyColor = '#eedd60';
+    gatorComp.traits.scuteColor = '#aa9020';
+  }
+
+  world.add(id, 'gator', gatorComp);
   return id;
 }
 
@@ -356,7 +367,7 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
     direction: rng.chance(0.5) ? 1 : -1,
   });
 
-  world.add(id, 'gator', {
+  const gatorComp = {
     stage: 'egg', frame: 'idle',
     spriteW: stageData.width, spriteH: stageData.height,
     sex: rng.chance(0.5) ? 'male' : 'female',
@@ -364,7 +375,18 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
     state: 'egg', stateTimer: 15,
     targetId: null, blinkTimer: 99, breatheTimer: 99, breatheOffset: 0,
     inWater: false, generation: gen, mealCount: 0, sizeScale: 1, traits,
-  });
+  };
+
+  // Golden gator — 1-in-100 chance
+  if (rng.chance(0.01)) {
+    gatorComp.golden = true;
+    gatorComp.traits.darkColor = '#8a7a20';
+    gatorComp.traits.bodyColor = '#ccaa30';
+    gatorComp.traits.bellyColor = '#eedd60';
+    gatorComp.traits.scuteColor = '#aa9020';
+  }
+
+  world.add(id, 'gator', gatorComp);
   return id;
 }
 
@@ -412,6 +434,9 @@ function spawnRivalGator(rng) {
   });
   return id;
 }
+
+// --- The Deep ---
+const deepState = { shadowX: -50, shadowActive: false, shadowTimer: 30, rippleTimer: 15, shadowDir: 1, eyeFlash: 0 };
 
 // --- Wildlife System ---
 const wildlifeState = createWildlifeState();
@@ -483,15 +508,15 @@ function preySystem(world, dt, simTime, rng) {
         for (const [fid, ftr, fprey] of world.query('transform', 'prey')) {
           if (fprey.type !== 'fly' || !fprey.alive) continue;
           const dist = Math.sqrt((ftr.x - tr.x) ** 2 + (ftr.y - tr.y) ** 2);
-          if (dist < 20) {
-            // Leap toward fly
+          if (dist < 35) {
+            // Leap toward fly — fast tongue strike
             const dx = ftr.x - tr.x;
             const dy = ftr.y - tr.y;
-            tr.vx = (dx / dist) * 15;
-            tr.vy = (dy / dist) * 15;
+            tr.vx = (dx / dist) * 22;
+            tr.vy = (dy / dist) * 22;
             chasedFly = true;
-            // Eat if close
-            if (dist < 4) {
+            // Eat if close — tongue range
+            if (dist < 6) {
               fprey.alive = false;
               world.kill(fid);
               prey.value += 0.02; // frog gets fatter
@@ -520,6 +545,41 @@ const fireState = createFireState();
 
 // --- PARTICLE SYSTEMS ---
 const particles = createParticleState();
+
+// --- SKULL GRAVEYARD ---
+const skulls = [];
+
+function addSkull(x, y) {
+  skulls.push({ x: Math.floor(x), y: Math.floor(y), age: 0 });
+}
+
+function renderSkulls(ctx, skulls, simTime) {
+  for (const skull of skulls) {
+    let color, mossed = false;
+    if (skull.age < 30) {
+      color = '#ddddcc'; // fresh bone white
+    } else if (skull.age < 120) {
+      color = '#cccc99'; // yellowing
+    } else {
+      color = '#88aa77'; // mossy green
+      mossed = true;
+    }
+    const sx = skull.x;
+    const sy = skull.y;
+    // Tiny 3x2 skull sprite
+    // Top row: rounded cranium (3 pixels)
+    ctx.fillStyle = color;
+    ctx.fillRect(sx, sy, 3, 1);
+    // Bottom row: jaw (pixel 0 and pixel 2, gap in middle)
+    ctx.fillRect(sx, sy + 1, 1, 1);
+    ctx.fillRect(sx + 2, sy + 1, 1, 1);
+    // Moss on top for old skulls
+    if (mossed) {
+      ctx.fillStyle = '#5a7a44';
+      ctx.fillRect(sx + 1, sy - 1, 1, 1);
+    }
+  }
+}
 
 
 // --- Cursor tracking for power glow ---
@@ -700,6 +760,36 @@ function renderFullUI(ctx, simTime) {
   }
 }
 
+// --- The Deep rendering ---
+function renderTheDeep(ctx, deepState, waterY, simTime) {
+  if (!deepState.shadowActive) return;
+  const sx = deepState.shadowX;
+  const baseY = waterY + 20 + Math.sin(simTime * 0.8) * 3; // undulate vertically
+  const bodyLen = 50;
+  const bodyH = 7;
+
+  // Draw dark elongated oval shape underwater
+  ctx.fillStyle = 'rgba(5, 15, 5, 0.3)';
+  for (let px = 0; px < bodyLen; px++) {
+    // Oval taper: full height in middle, thin at ends
+    const t = px / bodyLen; // 0..1
+    const taper = Math.sin(t * Math.PI); // 0 at edges, 1 at center
+    const h = Math.max(1, Math.floor(bodyH * taper));
+    const drawX = Math.floor(sx + (deepState.shadowDir === 1 ? px : -px));
+    const drawY = Math.floor(baseY - h / 2);
+    ctx.fillRect(drawX, drawY, 1, h);
+  }
+
+  // Eyes -- blink and you miss it
+  if (deepState.eyeFlash > 0) {
+    ctx.fillStyle = 'rgba(80, 120, 60, 0.2)';
+    const frontX = deepState.shadowDir === 1 ? sx + bodyLen - 5 : sx - bodyLen + 5;
+    const eyeY = Math.floor(baseY - 1);
+    ctx.fillRect(Math.floor(frontX), eyeY, 2, 2);
+    ctx.fillRect(Math.floor(frontX), eyeY + 3, 2, 2);
+  }
+}
+
 // --- Save on unload ---
 window.addEventListener('beforeunload', () => {
   persistence.save(world, env, simTime, maxGeneration);
@@ -738,7 +828,7 @@ function gameLoop(timestamp) {
   breedingSystem(world, dt, rng, waterY, spawnGatorFromParents);
   lifecycleSystem(world, dt, rng);
   predatorSystem(world, dt, rng, waterY, simTime);
-  physicsSystem(world, dt, terrain, waterY);
+  physicsSystem(world, dt, terrain, waterY, rng);
   updateAmbientParticles(particles, dt, simTime, rng, env, waterY);
   updateGatorRipples(particles, world, dt, rng, waterY);
   updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat });
@@ -746,6 +836,7 @@ function gameLoop(timestamp) {
   updateFires(fireState, dt, rng, wildlifeState.wildlife, world, env, waterY);
   updateVegGrowth(dt);
   updateAudio(dt, env, simTime);
+  setEpoch(vegState.epoch);
 
   // Audio hooks for events
   if (events.ufo) { setUFO(true); } else { setUFO(false); }
@@ -767,6 +858,49 @@ function gameLoop(timestamp) {
       spawnRivalGator(rng);
     }
     rivalTimer = rng.float(12, 30);
+  }
+
+  // --- The Deep update ---
+  deepState.shadowTimer -= dt;
+  if (deepState.shadowTimer <= 0 && !deepState.shadowActive) {
+    deepState.shadowActive = true;
+    deepState.shadowDir = rng.chance(0.5) ? 1 : -1;
+    deepState.shadowX = deepState.shadowDir === 1 ? -60 : CANVAS_W + 10;
+    deepState.shadowTimer = rng.float(30, 90);
+  }
+  if (deepState.shadowActive) {
+    deepState.shadowX += deepState.shadowDir * (CANVAS_W + 70) / 8 * dt; // cross in ~8 seconds
+    // Deactivate when off screen
+    if ((deepState.shadowDir === 1 && deepState.shadowX > CANVAS_W + 10) ||
+        (deepState.shadowDir === -1 && deepState.shadowX < -60)) {
+      deepState.shadowActive = false;
+    }
+    // Occasional eye flash
+    if (rng.chance(0.15 * dt)) {
+      deepState.eyeFlash = 0.03; // one frame basically
+    }
+    if (deepState.eyeFlash > 0) deepState.eyeFlash -= dt;
+  }
+  deepState.rippleTimer -= dt;
+  if (deepState.rippleTimer <= 0) {
+    addRipple(particles, rng.float(20, CANVAS_W - 20), waterY, rng.float(15, 20), 0.6);
+    deepState.rippleTimer = rng.float(15, 40);
+  }
+
+  // Skull aging
+  for (const skull of skulls) {
+    skull.age += dt;
+  }
+
+  // Harvest gator deaths — spawn skulls before flush removes them
+  for (const deadId of world.dead) {
+    if (world.has(deadId, 'gator')) {
+      const tr = world.get(deadId, 'transform');
+      const gator = world.get(deadId, 'gator');
+      if (tr && gator && gator.stage !== 'egg') {
+        addSkull(tr.x + (gator.spriteW || 10) / 2 - 1, tr.y + (gator.spriteH || 5) - 2);
+      }
+    }
   }
 
   // Population check — GAME OVER if all gators die
@@ -792,10 +926,12 @@ function gameLoop(timestamp) {
   renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);
   renderWater(ctx, waterY, simTime);
+  renderTheDeep(ctx, deepState, waterY, simTime);
   renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
   renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState);
+  renderSkulls(ctx, skulls, simTime);
   renderPrey(ctx, world, simTime);
-  renderGators(ctx, world);
+  renderGators(ctx, world, simTime);
   renderPredators(ctx, world);
   renderRipples(ctx, particles, dt);
   renderWildlife(ctx, wildlifeState, simTime);
@@ -863,6 +999,7 @@ canvas.addEventListener('pointerup', (e) => {
     wildlifeState.wildlife.length = 0;
     fireState.fires.length = 0;
     particles.deathParticles.length = 0;
+    skulls.length = 0;
     for (let i = 0; i < rng.range(4, 6); i++) {
       spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile']));
     }
