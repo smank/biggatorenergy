@@ -29,6 +29,7 @@ export function createEnvironment() {
     clouds: [],
     rainDrops: [],
     stars: [],
+    satellites: [],
   };
 }
 
@@ -126,6 +127,23 @@ export function environmentSystem(env, dt, rng) {
     }
   }
 
+  // Satellites — generate once, move continuously
+  if (env.satellites.length === 0) {
+    for (let i = 0; i < rng.range(2, 3); i++) {
+      env.satellites.push({
+        x: rng.range(0, CANVAS_W),
+        y: rng.range(3, 25),
+        speed: rng.float(8, 15),
+        direction: rng.chance(0.5) ? 1 : -1,
+      });
+    }
+  }
+  for (const sat of env.satellites) {
+    sat.x += sat.speed * sat.direction * dt;
+    if (sat.x > CANVAS_W + 5) sat.x = -5;
+    if (sat.x < -5) sat.x = CANVAS_W + 5;
+  }
+
   // Lunar cycle — ~8 day cycles per moon phase
   env.lunarPhase = (env.lunarPhase || 0) + dt / (DAY_LENGTH * 8);
   if (env.lunarPhase > 1) env.lunarPhase -= 1;
@@ -191,6 +209,11 @@ export function renderCelestial(ctx, env, waterY, simTime) {
         if (twinkle > 0) {
           ctx.fillRect(star.x, star.y, 1, 1);
         }
+      }
+      // Satellites — steady moving dots, no twinkle
+      ctx.fillStyle = `rgba(255, 255, 255, ${nightStrength * 0.7})`;
+      for (const sat of env.satellites) {
+        ctx.fillRect(Math.floor(sat.x), sat.y, 1, 1);
       }
     }
   }
@@ -267,13 +290,29 @@ export function renderEnvironmentEffects(ctx, env, waterY, simTime) {
   // Dawn/dusk tint
   if (tod > 0.18 && tod < 0.3) {
     const strength = 1 - (tod - 0.18) / 0.12;
-    ctx.fillStyle = `rgba(200, 100, 50, ${strength * 0.15})`;
-    ctx.fillRect(0, 0, CANVAS_W, waterY);
+    const bandH = Math.floor(waterY * 0.35);
+    // Warm orange at horizon
+    ctx.fillStyle = `rgba(220, 120, 50, ${strength * 0.12})`;
+    ctx.fillRect(0, waterY - bandH, CANVAS_W, bandH);
+    // Pink higher up
+    ctx.fillStyle = `rgba(200, 80, 80, ${strength * 0.08})`;
+    ctx.fillRect(0, waterY - bandH * 2, CANVAS_W, bandH);
+    // Faint purple at top
+    ctx.fillStyle = `rgba(120, 60, 120, ${strength * 0.05})`;
+    ctx.fillRect(0, 0, CANVAS_W, Math.max(1, waterY - bandH * 2));
   }
   if (tod > 0.7 && tod < 0.82) {
     const strength = (tod - 0.7) / 0.12;
-    ctx.fillStyle = `rgba(200, 80, 40, ${strength * 0.15})`;
-    ctx.fillRect(0, 0, CANVAS_W, waterY);
+    const bandH = Math.floor(waterY * 0.35);
+    // Deep orange at horizon
+    ctx.fillStyle = `rgba(200, 80, 30, ${strength * 0.15})`;
+    ctx.fillRect(0, waterY - bandH, CANVAS_W, bandH);
+    // Red-pink higher
+    ctx.fillStyle = `rgba(180, 50, 60, ${strength * 0.1})`;
+    ctx.fillRect(0, waterY - bandH * 2, CANVAS_W, bandH);
+    // Deep purple at top
+    ctx.fillStyle = `rgba(80, 30, 100, ${strength * 0.07})`;
+    ctx.fillRect(0, 0, CANVAS_W, Math.max(1, waterY - bandH * 2));
   }
 
   // Clouds

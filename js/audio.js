@@ -4,6 +4,7 @@
 let ctx = null;
 let started = false;
 let masterGain = null;
+let muted = false;
 
 // State
 let ambientDrone = null;
@@ -11,29 +12,43 @@ let rainNode = null;
 let rainGain = null;
 
 export function initAudio() {
-  // No-op — actual init happens in resumeAudio on first user gesture
-  // iOS requires AudioContext creation inside a touch/click handler
+  // Set up persistent listeners — retry audio resume on EVERY interaction
+  // In-app browsers (Instagram, TikTok) often swallow the first event
+  for (const evt of ['touchstart', 'touchend', 'click', 'pointerdown', 'keydown']) {
+    document.addEventListener(evt, resumeAudio, { passive: true });
+  }
 }
 
 export function resumeAudio() {
-  // Create context on first user interaction (iOS requirement)
   if (!ctx) {
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       masterGain = ctx.createGain();
-      masterGain.gain.value = 0.3;
+      masterGain.gain.value = muted ? 0 : 0.3;
       masterGain.connect(ctx.destination);
     } catch (e) {
-      return; // audio not supported
+      return;
     }
   }
   if (ctx.state === 'suspended') {
-    ctx.resume();
+    ctx.resume().catch(() => {});
   }
-  if (!started) {
+  if (!started && ctx.state === 'running') {
     started = true;
     startAmbientDrone();
   }
+}
+
+export function toggleMute() {
+  muted = !muted;
+  if (masterGain) {
+    masterGain.gain.value = muted ? 0 : 0.3;
+  }
+  return muted;
+}
+
+export function isMuted() {
+  return muted;
 }
 
 // --- Utility ---
@@ -305,7 +320,7 @@ let frogTimer = 3;
 let birdTimer = 5;
 
 export function updateAudio(dt, env, simTime) {
-  if (!ctx || !started) return;
+  if (!ctx || !started || muted) return;
 
   const isNight = env.timeOfDay < 0.2 || env.timeOfDay > 0.8;
   const isDusk = (env.timeOfDay > 0.7 && env.timeOfDay < 0.85) || (env.timeOfDay > 0.15 && env.timeOfDay < 0.25);

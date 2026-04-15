@@ -74,7 +74,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           ufo.phase = 'abduct';
           ufo.timer = 5; // longer struggle window
           ufo.struggleProgress = 0; // 0 = ground, 1 = fully abducted
-          ufo.beamStrength = rng.float(0.4, 0.9); // UFO tractor beam power
+          ufo.beamStrength = rng.float(0.6, 1.2); // UFO tractor beam power
           ufo.shakeIntensity = 0;
           // Find nearest gator — wide search
           const gators = world.query('transform', 'gator');
@@ -118,7 +118,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           // Gator resistance based on size, strength, aggression
           const gatorSize = victimGator.sizeScale || 1;
           const gatorStage = victimGator.stage;
-          const stageWeight = { hatchling: 0.2, juvenile: 0.5, adult: 1.0, elder: 1.3 };
+          const stageWeight = { hatchling: 0.15, juvenile: 0.35, adult: 0.8, elder: 1.5 };
           const weight = (stageWeight[gatorStage] || 1) * gatorSize;
           const aggression = victimGator.traits?.aggression || 0.5;
           const gatorResistance = weight * (0.5 + aggression * 0.5);
@@ -126,9 +126,9 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           // Beam pulls up, gator resists — each frame is a dice roll
           const pullForce = ufo.beamStrength;
           const resistForce = gatorResistance * rng.float(0.3, 1.2); // luck factor
-          const netForce = pullForce - resistForce * 0.7;
+          const netForce = pullForce - resistForce * 0.5;
 
-          ufo.struggleProgress += netForce * dt * 0.15;
+          ufo.struggleProgress += netForce * dt * 0.3;
           ufo.struggleProgress = Math.max(0, Math.min(1, ufo.struggleProgress));
 
           // Visual: gator position interpolated between ground and UFO
@@ -186,7 +186,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           if (ufo.victimId !== null) {
             const victimTr = world.get(ufo.victimId, 'transform');
             if (victimTr) {
-              if (ufo.struggleProgress > 0.6) {
+              if (ufo.struggleProgress > 0.45) {
                 // Close enough — abduction succeeds at the last moment
                 world.kill(ufo.victimId);
                 ufo.abducted = true;

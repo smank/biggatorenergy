@@ -151,6 +151,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   // vegState controls density — vegetation grows and shrinks over time
   const vg = vegState || { growth: 1, treeGrowth: 1, flowerBloom: 1, undergrowth: 1 };
   // --- TALL CYPRESS / SWAMP TREES ---
+  const treeZones = []; // track canopy positions for orchid anchoring
   const numTrees = Math.floor(vegRng.range(5, 9) * vg.treeGrowth);
   for (let i = 0; i < numTrees; i++) {
     const x = vegRng.range(8, CANVAS_W - 8);
@@ -199,6 +200,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
       const canopyY = groundY - trunkH;
       const canopyW = Math.floor(vegRng.range(12, 22) * vg.treeGrowth);
       const canopyH = vegRng.range(6, 12);
+      treeZones.push({ x, canopyY, canopyW, canopyH });
 
       // Dark canopy base
       ctx.fillStyle = '#1a3a14';
@@ -396,10 +398,17 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
     const numOrchids = Math.floor(vegRng.range(3, 8) * vg.orchidChance);
     for (let i = 0; i < numOrchids; i++) {
       const x = vegRng.range(15, CANVAS_W - 15);
-      const groundY = terrain[Math.min(CANVAS_W - 1, Math.max(0, x))];
-      if (groundY < waterY + 5) {
-        // Orchid hangs from tree canopy area
-        const oy = groundY - vegRng.range(20, 40);
+      // Find nearest tree canopy to anchor orchid
+      let nearestTree = null;
+      for (const tz of treeZones) {
+        if (Math.abs(x - tz.x) < tz.canopyW / 2) {
+          nearestTree = tz;
+          break;
+        }
+      }
+      if (!nearestTree) { vegRng.random(); vegRng.random(); continue; } // consume RNG to stay deterministic
+      {
+        const oy = nearestTree.canopyY + nearestTree.canopyH + vegRng.range(2, 10);
         if (oy < 5) continue;
         const orchidColor = vegRng.pick(['#dd55cc', '#cc33aa', '#ee88dd', '#ff66ee', '#aa22cc', '#ffffff']);
         // Stem
@@ -729,16 +738,38 @@ export function renderGators(ctx, world) {
       drawSprite(ctx, sprite, drawX, drawY, tr.direction === -1, tints);
     }
 
-    // Green glow for gators that ate aliens
+    // Green glow for gators that ate aliens — conforms to sprite silhouette
     if (gator.glowing && gator.glowTimer > 0) {
-      gator.glowTimer -= 0.016; // ~1 frame
+      gator.glowTimer -= 0.016;
       const glowPulse = 0.1 + Math.sin(Date.now() * 0.005) * 0.05;
-      const w = (gator.spriteW || 20) * (scale > 1.05 ? scale : 1);
-      const h = (gator.spriteH || 8) * (scale > 1.05 ? scale : 1);
-      ctx.fillStyle = `rgba(0, 255, 50, ${glowPulse})`;
-      ctx.fillRect(drawX - 1, drawY - 1, Math.ceil(w) + 2, Math.ceil(h) + 2);
+      const glowScale = scale > 1.05 ? scale : 1;
+      const flipX = tr.direction === -1;
+      // Outer glow pass — 1px border around each non-transparent pixel
       ctx.fillStyle = `rgba(0, 200, 30, ${glowPulse * 0.5})`;
-      ctx.fillRect(drawX - 2, drawY - 2, Math.ceil(w) + 4, Math.ceil(h) + 4);
+      for (let py = 0; py < sprite.length; py++) {
+        const row = sprite[py];
+        for (let px = 0; px < row.length; px++) {
+          if (!row[px]) continue;
+          const dx = flipX ? (row.length - 1 - px) : px;
+          const sx = Math.floor(drawX + dx * glowScale);
+          const sy = Math.floor(drawY + py * glowScale);
+          const sz = Math.max(1, Math.ceil(glowScale));
+          ctx.fillRect(sx - 1, sy - 1, sz + 2, sz + 2);
+        }
+      }
+      // Inner glow pass — on top of each pixel
+      ctx.fillStyle = `rgba(0, 255, 50, ${glowPulse})`;
+      for (let py = 0; py < sprite.length; py++) {
+        const row = sprite[py];
+        for (let px = 0; px < row.length; px++) {
+          if (!row[px]) continue;
+          const dx = flipX ? (row.length - 1 - px) : px;
+          const sx = Math.floor(drawX + dx * glowScale);
+          const sy = Math.floor(drawY + py * glowScale);
+          const sz = Math.max(1, Math.ceil(glowScale));
+          ctx.fillRect(sx, sy, sz, sz);
+        }
+      }
       if (gator.glowTimer <= 0) gator.glowing = false;
     }
   }

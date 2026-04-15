@@ -13,7 +13,7 @@ import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, rende
 import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
-import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion } from './audio.js';
+import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
@@ -31,7 +31,7 @@ canvas.width = CANVAS_W;
 canvas.height = CANVAS_H;
 ctx.imageSmoothingEnabled = false;
 
-// Audio — init and start on overlay click
+// Audio — initAudio sets up persistent listeners on all interaction events
 initAudio();
 const startOverlay = document.getElementById('start-overlay');
 function enterSwamp() {
@@ -39,13 +39,13 @@ function enterSwamp() {
   if (startOverlay) startOverlay.classList.add('hidden');
 }
 if (startOverlay) {
-  // touchend is more reliable than touchstart for iOS audio unlock
   startOverlay.addEventListener('touchend', (e) => { e.preventDefault(); enterSwamp(); }, { once: true });
   startOverlay.addEventListener('click', enterSwamp, { once: true });
 }
-// Fallback — any interaction unlocks audio
-document.addEventListener('keydown', () => resumeAudio(), { once: true });
-document.addEventListener('touchstart', () => resumeAudio(), { once: true });
+// M key toggles mute
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') toggleMute();
+});
 
 // --- Orientation Detection ---
 // JS-based because CSS media queries fail in Instagram/TikTok/Facebook/Twitter in-app browsers
@@ -665,8 +665,14 @@ function renderFullUI(ctx, simTime) {
   const infoText = `${env.season} d${env.dayCount || 0}`;
   // Show epoch in top-right when not in god mode
   if (!isGodMode() && vegState.epoch > 0) {
-    ctx.fillStyle = '#445544';
-    drawPixelText(ctx, epochName, CANVAS_W - epochName.length * 4 - 2, 3);
+    const epochLabel = `era:${epochName}`;
+    ctx.fillStyle = '#3a4a3a';
+    drawPixelText(ctx, epochLabel, CANVAS_W - epochLabel.length * 4 - 2, 3);
+  }
+  // Mute indicator
+  if (isMuted()) {
+    ctx.fillStyle = '#554444';
+    drawPixelText(ctx, 'muted', 2, CANVAS_H - 20);
   }
   drawPixelText(ctx, infoText, CANVAS_W - infoText.length * 4 - 2, CANVAS_H - 13);
 
