@@ -48,14 +48,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 // --- Orientation Detection ---
-// JS-based because CSS media queries fail in Instagram/TikTok/Facebook/Twitter in-app browsers
+// Polls every frame — in-app browsers (Instagram, Facebook, TikTok, Twitter, Snapchat)
+// often don't fire resize/orientationchange events on rotation
 const rotatePrompt = document.getElementById('rotate-prompt');
+let lastOrientationCheck = '';
 
 function checkOrientation() {
-  // Use window dimensions — most reliable across all browsers including in-app webviews
-  const w = window.innerWidth || document.documentElement.clientWidth;
-  const h = window.innerHeight || document.documentElement.clientHeight;
-  const isPortrait = h > w && w < 768;
+  const w = window.innerWidth || document.documentElement.clientWidth || screen.width;
+  const h = window.innerHeight || document.documentElement.clientHeight || screen.height;
+  const key = `${w}x${h}`;
+  if (key === lastOrientationCheck) return; // no change
+  lastOrientationCheck = key;
+
+  const isPortrait = h > w && Math.min(w, h) < 768;
 
   if (isPortrait) {
     document.body.classList.add('show-rotate');
@@ -67,15 +72,13 @@ function checkOrientation() {
 }
 
 checkOrientation();
+// Listen to everything — some subset will fire in any given browser
 window.addEventListener('resize', checkOrientation);
-// screen.orientation API — works on Android, some in-app browsers
-if (screen.orientation) {
-  screen.orientation.addEventListener('change', checkOrientation);
-}
-// Fallback for iOS and older browsers
+if (screen.orientation) screen.orientation.addEventListener('change', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
-// In-app browsers sometimes fire this late — recheck after a delay
-window.addEventListener('load', () => setTimeout(checkOrientation, 500));
+// Touch can trigger a recheck — in-app browsers sometimes update dimensions on interaction
+document.addEventListener('touchstart', checkOrientation, { passive: true });
+document.addEventListener('visibilitychange', checkOrientation);
 
 // --- Terrain ---
 const waterY = Math.floor(CANVAS_H * WATER_LINE);
@@ -714,6 +717,9 @@ function gameLoop(timestamp) {
   if (dt > MAX_DT) dt = MAX_DT;
   lastTime = timestamp;
   simTime += dt;
+
+  // Orientation poll — catches rotations in browsers that fire no events
+  checkOrientation();
 
   // Environment
   environmentSystem(env, dt, rng);
