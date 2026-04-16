@@ -874,6 +874,7 @@ function renderPredators(ctx, world) {
 
 // --- Extended UI ---
 let tickerOffset = 0;
+let tickerCache = { key: '', text: '', width: 0 };
 
 function renderFullUI(ctx, simTime) {
   ctx.fillStyle = '#334433';
@@ -906,16 +907,20 @@ function renderFullUI(ctx, simTime) {
   }
 
   // --- Live ticker (scrolling bar at very bottom) ---
-  const tickerText = `LIVE -- BIG GATOR ENERGY SWAMP CAM -- EST. 2026 -- POP: ${gatorCount} -- GEN: ${maxGeneration} -- DAY ${env.dayCount || 0} -- ${env.season.toUpperCase()} -- ${env.weather !== 'clear' ? env.weather.toUpperCase() + ' -- ' : ''}SEED: ${seed.length > 12 ? seed.slice(-12) : seed} --  `;
-  const charW = 4; // each pixel-font char is 3px wide + 1px gap
-  const textPixelW = tickerText.length * charW;
-  tickerOffset = (simTime * 8) % textPixelW; // 8px/sec scroll
+  // Cache the text — only rebuild when any tracked value actually changes
+  const tickerKey = `${gatorCount}|${maxGeneration}|${env.dayCount || 0}|${env.season}|${env.weather}`;
+  if (tickerKey !== tickerCache.key) {
+    const weatherPart = env.weather !== 'clear' ? env.weather.toUpperCase() + ' -- ' : '';
+    const seedPart = seed.length > 12 ? seed.slice(-12) : seed;
+    tickerCache.text = `LIVE -- BIG GATOR ENERGY SWAMP CAM -- EST. 2026 -- POP: ${gatorCount} -- GEN: ${maxGeneration} -- DAY ${env.dayCount || 0} -- ${env.season.toUpperCase()} -- ${weatherPart}SEED: ${seedPart} --  `;
+    tickerCache.width = tickerCache.text.length * 4; // 3px char + 1px gap
+    tickerCache.key = tickerKey;
+  }
+  tickerOffset = (simTime * 8) % tickerCache.width; // 8px/sec scroll
   const tickerY = CANVAS_H - 6;
   ctx.fillStyle = '#4a6a4a';
-  // Draw the ticker text twice for seamless wrap
-  const startX = -tickerOffset;
-  for (let ox = startX; ox < CANVAS_W; ox += textPixelW) {
-    drawPixelText(ctx, tickerText, Math.floor(ox), tickerY);
+  for (let ox = -tickerOffset; ox < CANVAS_W; ox += tickerCache.width) {
+    drawPixelText(ctx, tickerCache.text, Math.floor(ox), tickerY);
   }
 
   // Cursor glow — only in god mode

@@ -13,6 +13,13 @@ export const WILDLIFE_TYPES = [
 ];
 
 export const CRYPTID_TYPES = ['sasquatch', 'chupacabra', 'mothman'];
+const CRYPTID_SET = new Set(CRYPTID_TYPES);
+
+// Pre-built Sets for hot-path type checks (avoid per-frame .includes() O(n) scans)
+const GRAVITY_TYPES = new Set(['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien', 'wild_boar', 'panther', 'coyote', 'jeep']);
+const HUNTER_TYPES = new Set(['hunter_foot', 'hunter_boat', 'jeep', 'airboat']);
+const NON_EDIBLE_WILDLIFE = new Set(['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey']);
+const TOUGH_PREY = new Set(['deer', 'raccoon', 'nutria']);
 
 export const FOOD_CHAIN = {
   snake:       { prey: ['crawfish', 'rabbit', 'mosquito_swarm'], fears: ['heron_bg', 'egret', 'bird', 'sasquatch', 'hunter_foot', 'hunter_boat'], speed: 8 },
@@ -558,13 +565,13 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
     }
 
     // --- Gravity for land animals ---
-    if (['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien', 'wild_boar', 'panther', 'coyote', 'jeep'].includes(w.type)) {
+    if (GRAVITY_TYPES.has(w.type)) {
       w.vy = (w.vy || 0) + 15 * dt;
       if (w.y > waterY - 2) { w.y = waterY - 2; w.vy = Math.min(0, w.vy); }
     }
 
     // --- HUNTERS vs EVERYTHING ---
-    if (['hunter_foot', 'hunter_boat', 'jeep', 'airboat'].includes(w.type)) {
+    if (HUNTER_TYPES.has(w.type)) {
       w.huntTimer = (w.huntTimer || 0) - dt;
       if (w.huntTimer <= 0) {
         // Find nearest target — gators preferred, but will shoot anything
@@ -656,8 +663,8 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
     // --- GATORS eat wildlife on contact ---
     for (const [id, tr, gator] of world.query('transform', 'gator')) {
       if (gator.stage === 'egg' || gator.stage === 'hatchling') continue;
-      if (CRYPTID_TYPES.includes(w.type)) continue;
-      if (['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey'].includes(w.type)) continue;
+      if (CRYPTID_SET.has(w.type)) continue;
+      if (NON_EDIBLE_WILDLIFE.has(w.type)) continue;
       // Aliens fight back but can be eaten
 
       const sizeScale = gator.sizeScale || 1;
@@ -665,7 +672,7 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
       const dist = distance(tr.x + (gator.spriteW || 10) / 2, tr.y, w.x, w.y);
       if (dist < eatDist) {
         // Fight check for bigger prey
-        if (['deer', 'raccoon', 'nutria'].includes(w.type) && gator.stage === 'juvenile') {
+        if (TOUGH_PREY.has(w.type) && gator.stage === 'juvenile') {
           if (rng.chance(0.4)) continue; // juvenile might fail
         }
         // Alien fight — they resist with rayguns. Real odds.
