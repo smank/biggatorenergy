@@ -61,6 +61,12 @@ function enterSwamp() {
 if (startOverlay) {
   startOverlay.addEventListener('touchend', (e) => { e.preventDefault(); enterSwamp(); }, { once: true });
   startOverlay.addEventListener('click', enterSwamp, { once: true });
+  startOverlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      enterSwamp();
+    }
+  }, { once: true });
 }
 // M key toggles mute
 document.addEventListener('keydown', (e) => {

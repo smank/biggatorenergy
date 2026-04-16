@@ -9,10 +9,23 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #0a0a12;
-  -webkit-user-select: none;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Screen-reader-only heading (for SEO / a11y without visual impact) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 canvas#game {
@@ -27,6 +40,12 @@ canvas#game {
   image-rendering: -moz-crisp-edges;
   image-rendering: -webkit-crisp-edges;
   cursor: crosshair;
+  touch-action: none;
+}
+
+/* Touch devices: no hover, no precise pointer — show a normal pointer */
+@media (hover: none) and (pointer: coarse) {
+  canvas#game { cursor: default; }
 }
 
 /* --- Start overlay --- */
@@ -42,6 +61,12 @@ canvas#game {
   justify-content: center;
   cursor: pointer;
   z-index: 10;
+  outline: none;
+}
+
+#start-overlay:focus-visible {
+  outline: 2px solid #6a8a5a;
+  outline-offset: -4px;
 }
 
 #start-overlay.hidden {
@@ -91,7 +116,7 @@ canvas#game {
   text-transform: lowercase;
 }
 
-/* Hide canvas when rotate prompt is showing (controlled by JS) */
+/* Hide canvas + overlay when rotate prompt is showing (controlled by JS) */
 body.show-rotate canvas#game,
 body.show-rotate #start-overlay {
   display: none;
@@ -106,4 +131,14 @@ body.show-rotate #start-overlay {
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(25deg); }
   75% { transform: rotate(-25deg); }
+}
+
+/* Respect OS-level motion reduction — kill the animated chrome,
+   leave the canvas simulation untouched (it is the content). */
+@media (prefers-reduced-motion: reduce) {
+  #start-text,
+  #rotate-icon {
+    animation: none;
+    opacity: 1;
+  }
 }
