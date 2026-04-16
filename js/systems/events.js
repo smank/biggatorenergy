@@ -246,13 +246,9 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           ufo.crashY = waterY - 3;
           events.lightningFlash = 0.8; // impact flash
           if (events.onExplosion) events.onExplosion();
-          // Spawn alien survivors — 1 to 3 crawl out of the wreckage
-          if (events.onAlienSurvive) {
-            const numAliens = rng.range(1, 3);
-            for (let a = 0; a < numAliens; a++) {
-              events.onAlienSurvive(ufo.x + rng.float(-8, 8), waterY - 4, rng);
-            }
-          }
+          // Aliens will crawl out during the 'crashed' phase
+          ufo.aliensToSpawn = rng.range(1, 3);
+          ufo.alienSpawnTimer = rng.float(1.5, 3); // delay before first one emerges
           // Crash starts a fire
           if (events.onStartFire) {
             events.onStartFire(ufo.x - 3, waterY - 3, rng);
@@ -262,8 +258,18 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
         break;
       }
       case 'crashed':
-        // Wreckage sits there briefly then fades
         ufo.timer -= dt;
+        // Aliens crawl out of the wreckage one at a time
+        if (ufo.aliensToSpawn > 0) {
+          ufo.alienSpawnTimer -= dt;
+          if (ufo.alienSpawnTimer <= 0) {
+            if (events.onAlienSurvive) {
+              events.onAlienSurvive(ufo.crashX, ufo.crashY, rng);
+            }
+            ufo.aliensToSpawn--;
+            ufo.alienSpawnTimer = rng.float(1, 2.5); // stagger each survivor
+          }
+        }
         if (ufo.timer <= 0) {
           events.ufo = null;
         }
