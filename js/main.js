@@ -786,9 +786,9 @@ function renderFullUI(ctx, simTime) {
   const tickerText = `LIVE -- BIG GATOR ENERGY SWAMP CAM -- EST. 2026 -- POP: ${gatorCount} -- GEN: ${maxGeneration} -- DAY ${env.dayCount || 0} -- ${env.season.toUpperCase()} -- ${env.weather !== 'clear' ? env.weather.toUpperCase() + ' -- ' : ''}SEED: ${seed.length > 12 ? seed.slice(-12) : seed} --  `;
   const charW = 4; // each pixel-font char is 3px wide + 1px gap
   const textPixelW = tickerText.length * charW;
-  tickerOffset = (simTime * 20) % textPixelW; // 20px/sec scroll driven by simTime
+  tickerOffset = (simTime * 8) % textPixelW; // 8px/sec scroll
   const tickerY = CANVAS_H - 6;
-  ctx.fillStyle = '#2a3a2a';
+  ctx.fillStyle = '#4a6a4a';
   // Draw the ticker text twice for seamless wrap
   const startX = -tickerOffset;
   for (let ox = startX; ox < CANVAS_W; ox += textPixelW) {
