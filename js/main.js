@@ -505,43 +505,56 @@ function preySystem(world, dt, simTime, rng) {
         break;
       case 'frog':
         prey.buzzTimer -= dt;
-        // Frogs actively hunt flies — primary behavior
+        // Frogs hunt flies but can't fly — they hop on the ground and use their tongue
         let chasedFly = false;
         for (const [fid, ftr, fprey] of world.query('transform', 'prey')) {
           if (fprey.type !== 'fly' || !fprey.alive) continue;
           const dx = ftr.x - tr.x;
           const dy = ftr.y - tr.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 50) {
-            // Leap toward fly — powerful jump
-            const speed = dist < 15 ? 30 : 22; // faster when close
-            tr.vx = (dx / dist) * speed;
-            tr.vy = (dy / dist) * speed;
-            chasedFly = true;
-            // Tongue flick toward fly while chasing
-            prey.tongueTarget = { x: ftr.x, y: ftr.y };
-            prey.tongueFlick = 0.15; // brief flash
 
-            // Eat — tongue snaps out and grabs
-            if (dist < 7) {
-              fprey.alive = false;
-              world.kill(fid);
-              prey.value += 0.03;
-              prey.tongueFlick = 0.3; // longer flick on successful catch
+          // Only pursue flies that are reachable — within tongue range vertically
+          const flyTooHigh = ftr.y < tr.y - 15;
+          if (dist < 40 && !flyTooHigh) {
+            chasedFly = true;
+
+            // Hop toward fly horizontally — frogs stay on the ground
+            const onGround = tr.y >= waterY - 3;
+            if (onGround) {
+              tr.vx = Math.sign(dx) * Math.min(Math.abs(dx), 10);
+              // Small hop if fly is slightly above
+              if (dy < -3) {
+                tr.vy = -rng.float(6, 10); // short arc jump, not flight
+              }
+            }
+
+            // Tongue strike — only when horizontally close
+            prey.tongueTarget = { x: ftr.x, y: ftr.y };
+            if (Math.abs(dx) < 12 && dist < 15) {
+              prey.tongueFlick = 0.2;
+              // Eat if tongue can reach
+              if (dist < 10) {
+                fprey.alive = false;
+                world.kill(fid);
+                prey.value += 0.03;
+                prey.tongueFlick = 0.35;
+              }
             }
             break;
           }
         }
         if (!chasedFly) {
-          // Idle hopping when no flies nearby
+          // Idle hopping — short grounded hops
           if (prey.buzzTimer <= 0) {
-            tr.vx = rng.float(-4, 4);
-            tr.vy = -rng.float(5, 12); // higher jumps to spot flies
-            prey.buzzTimer = rng.float(0.8, 2.5); // more frequent hops
+            tr.vx = rng.float(-3, 3);
+            if (tr.y >= waterY - 3) {
+              tr.vy = -rng.float(4, 7); // modest hop
+            }
+            prey.buzzTimer = rng.float(1, 3);
           }
         }
-        tr.vy += 18 * dt; // gravity
-        if (tr.y > waterY - 2) { tr.y = waterY - 2; tr.vy = 0; }
+        tr.vy += 25 * dt; // strong gravity — frogs come back down fast
+        if (tr.y > waterY - 2) { tr.y = waterY - 2; tr.vy = 0; tr.vx *= 0.8; }
         break;
     }
   }
