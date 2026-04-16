@@ -207,9 +207,9 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
       case 'depart':
         ufo.y -= 25 * dt;
         ufo.x += 15 * dt;
-        // Chance to malfunction and crash — higher if carrying a gator
+        // Chance to malfunction and crash — only if abduction failed (no payload)
         if (!ufo.crashChecked) {
-          const crashChance = ufo.abducted ? 0.45 : 0.25;
+          const crashChance = ufo.abducted ? 0 : 0.35;
           if (rng.chance(crashChance)) {
             ufo.phase = 'crashing';
             ufo.crashVx = rng.float(-15, 15);

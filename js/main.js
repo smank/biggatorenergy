@@ -494,7 +494,9 @@ function preySystem(world, dt, simTime, rng) {
           prey.buzzTimer = rng.float(0.1, 0.4);
         }
         tr.vx *= 0.98; tr.vy *= 0.98;
-        if (tr.y > waterY - 3) tr.vy -= 15 * dt;
+        // Flies can dip close to the water — frogs need to catch them
+        if (tr.y > waterY - 1) tr.vy -= 20 * dt; // hard bounce off water
+        else if (tr.y > waterY - 8) tr.vy -= 3 * dt; // gentle drift upward near surface
         if (tr.y < 5) tr.vy += 10 * dt;
         if (tr.x < 5) tr.vx += 10 * dt;
         if (tr.x > CANVAS_W - 5) tr.vx -= 10 * dt;
@@ -513,27 +515,26 @@ function preySystem(world, dt, simTime, rng) {
           const dy = ftr.y - tr.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          // Only pursue flies that are reachable — within tongue range vertically
-          const flyTooHigh = ftr.y < tr.y - 15;
-          if (dist < 40 && !flyTooHigh) {
+          // Only pursue flies within reach
+          const flyTooHigh = ftr.y < tr.y - 20;
+          if (dist < 45 && !flyTooHigh) {
             chasedFly = true;
 
-            // Hop toward fly horizontally — frogs stay on the ground
+            // Hop toward fly horizontally
             const onGround = tr.y >= waterY - 3;
             if (onGround) {
-              tr.vx = Math.sign(dx) * Math.min(Math.abs(dx), 10);
-              // Small hop if fly is slightly above
+              tr.vx = Math.sign(dx) * Math.min(Math.abs(dx), 12);
               if (dy < -3) {
-                tr.vy = -rng.float(6, 10); // short arc jump, not flight
+                tr.vy = -rng.float(6, 10);
               }
             }
 
-            // Tongue strike — only when horizontally close
+            // Tongue strike — generous range, frogs are good at this
             prey.tongueTarget = { x: ftr.x, y: ftr.y };
-            if (Math.abs(dx) < 12 && dist < 15) {
+            if (dist < 18) {
               prey.tongueFlick = 0.2;
-              // Eat if tongue can reach
-              if (dist < 10) {
+              // Eat — tongue is long and sticky
+              if (dist < 15) {
                 fprey.alive = false;
                 world.kill(fid);
                 prey.value += 0.03;
