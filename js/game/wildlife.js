@@ -467,6 +467,23 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
         }
         break;
       case 'alien': {
+        // Beam-up exit when life is almost gone
+        if (w.life < 3 && !w.beamingUp) {
+          w.beamingUp = true;
+          w.beamTimer = 2.5;
+          w.vx = 0;
+        }
+        if (w.beamingUp) {
+          w.beamTimer -= dt;
+          w.vx = 0;
+          w.vy = -3 * (1 - w.beamTimer / 2.5); // accelerate upward
+          w.y += w.vy * dt;
+          if (w.beamTimer <= 0) {
+            w.alive = false; // gone
+          }
+          break; // skip all other alien behavior while beaming
+        }
+
         // Panicked alien with raygun — aggressive, dangerous
         w.raygunTimer = (w.raygunTimer || 0) - dt;
         // Erratic panicked movement
@@ -1265,6 +1282,22 @@ export function renderWildlife(ctx, state, simTime) {
         // Alien glow aura
         ctx.fillStyle = 'rgba(0, 255, 0, 0.08)';
         ctx.fillRect(px - 2, py - 3, 6, 8);
+
+        // Beam-up effect — wavy glow column rising upward
+        if (w.beamingUp) {
+          const beamProgress = 1 - (w.beamTimer / 2.5);
+          const beamAlpha = 0.1 + beamProgress * 0.25;
+          // Vertical beam column above the alien
+          for (let by = py - 3; by > py - 50; by--) {
+            const wave = Math.sin(by * 0.4 + simTime * 8) * 1.5;
+            const width = 2 + Math.floor(beamProgress * 2);
+            ctx.fillStyle = `rgba(100, 255, 150, ${beamAlpha * (1 - (py - 3 - by) / 50)})`;
+            ctx.fillRect(px - Math.floor(width / 2) + Math.floor(wave), by, width, 1);
+          }
+          // Alien body flickers/fades
+          ctx.fillStyle = `rgba(100, 255, 150, ${0.2 + Math.sin(simTime * 12) * 0.15})`;
+          ctx.fillRect(px - 1, py - 2, 4, 6);
+        }
         break;
       }
     }
