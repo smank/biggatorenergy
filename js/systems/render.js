@@ -185,9 +185,15 @@ export function renderWater(ctx, waterY, simTime) {
   }
 }
 
-export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState) {
+export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState, env) {
   // vegState controls density — vegetation grows and shrinks over time
   const vg = vegState || { growth: 1, treeGrowth: 1, flowerBloom: 1, undergrowth: 1 };
+  // Wind strength from weather — affects all sway
+  const isStorm = env && (env.weather === 'storm');
+  const isRain = env && (env.weather === 'rain');
+  const hurricaneWind = env && env._hurricaneWind || 0;
+  const windMult = hurricaneWind ? 4 + Math.abs(hurricaneWind) * 0.1 : isStorm ? 3 : isRain ? 1.8 : 1;
+  const windDir = hurricaneWind ? Math.sign(hurricaneWind) : Math.sin(simTime * 0.3); // unified wind direction
   // --- TALL CYPRESS / SWAMP TREES ---
   const treeZones = []; // track canopy positions for orchid anchoring
   const numTrees = Math.floor(vegRng.range(5, 9) * vg.treeGrowth);
@@ -197,7 +203,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
     if (groundY < waterY + 8) {
       const trunkH = vegRng.range(30, 55); // TALL trees
       const trunkW = vegRng.range(2, 5);
-      const sway = Math.sin(simTime * 0.2 + x * 0.15) * 0.4;
+      const sway = (Math.sin(simTime * 0.2 + x * 0.15) * 0.4 + windDir * 0.3) * windMult;
       const treeType = vegRng.range(0, 2); // variety
 
       // Massive buttressed roots
@@ -342,7 +348,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
     const x = vegRng.range(0, CANVAS_W - 1);
     const groundY = terrain[x];
     if (groundY < waterY + 2) {
-      const sway = Math.sin(simTime * 1.5 + x * 0.5) * 0.5;
+      const sway = (Math.sin(simTime * 1.5 + x * 0.5) * 0.5 + windDir * 0.2) * windMult;
       const h = vegRng.range(2, 5);
       ctx.fillStyle = vegRng.chance(0.5) ? '#4a7a2e' : '#3a6a22';
       for (let dy = 0; dy < h; dy++) {
@@ -358,7 +364,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
     const groundY = terrain[x];
     if (Math.abs(groundY - waterY) < 10) {
       const height = vegRng.range(8, 15);
-      const sway = Math.sin(simTime * 0.8 + x * 0.3) * 0.7;
+      const sway = (Math.sin(simTime * 0.8 + x * 0.3) * 0.7 + windDir * 0.4) * windMult;
       ctx.fillStyle = '#5a4a2a';
       for (let dy = 0; dy < height; dy++) {
         const swayOffset = Math.round(sway * (dy / height));

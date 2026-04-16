@@ -891,7 +891,8 @@ function gameLoop(timestamp) {
   if (events.ufo) { setUFO(true); } else { setUFO(false); }
   updateDeathParticles(particles, dt);
 
-  // Hurricane pushes everything
+  // Hurricane pushes everything + expose wind to renderer
+  env._hurricaneWind = events.hurricane ? events.hurricane.windSpeed : 0;
   if (events.hurricane) {
     const wind = events.hurricane.windSpeed * dt;
     for (const w of wildlifeState.wildlife) { w.x += wind; }
@@ -977,7 +978,7 @@ function gameLoop(timestamp) {
   renderWater(ctx, waterY, simTime);
   renderTheDeep(ctx, deepState, waterY, simTime);
   renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
-  renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState);
+  renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState, env);
   renderSkulls(ctx, skulls, simTime);
   renderPrey(ctx, world, simTime, dt);
   renderGators(ctx, world, simTime);
