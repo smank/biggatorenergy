@@ -238,25 +238,6 @@ function triggerSurprise(rng) {
   } else if (roll < 0.55 && epoch >= 2) {
     // Bioluminescence — water glows blue-green at night
     vegState.biolum = { timer: rng.float(15, 30), intensity: 0 };
-  } else if (roll < 0.65 && epoch >= 3) {
-    // Mass hatching — hatchlings emerge near water (not eggs from nowhere)
-    for (let i = 0; i < rng.range(2, 4); i++) {
-      const x = rng.float(20, CANVAS_W - 20);
-      const id = world.create();
-      const stageData = GATOR_STAGES['hatchling'];
-      const colors = randomGatorColors(rng);
-      world.add(id, 'transform', { x, y: waterY - rng.float(2, 5), vx: 0, vy: 0, direction: rng.chance(0.5) ? 1 : -1 });
-      world.add(id, 'gator', {
-        stage: 'hatchling', frame: 'idle',
-        spriteW: stageData.width, spriteH: stageData.height,
-        sex: rng.chance(0.5) ? 'male' : 'female',
-        age: 0, hunger: 0.3, energy: 0.8, health: 1.0,
-        state: null, stateTimer: 0, targetId: null,
-        blinkTimer: rng.float(2, 6), breatheTimer: rng.float(6, 12), breatheOffset: 0,
-        inWater: false, generation: maxGeneration + 1, mealCount: 0, sizeScale: 1,
-        traits: { speed: rng.float(0.7, 1.3), maxSize: rng.float(0.8, 1.2), aggression: rng.float(0.2, 0.8), fertility: rng.float(0.3, 0.7), metabolism: rng.float(0.7, 1.3), ...colors },
-      });
-    }
   } else if (roll < 0.72 && epoch >= 1) {
     // Frog chorus — tons of frogs spawn
     for (let i = 0; i < rng.range(6, 15); i++) {
