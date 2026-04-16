@@ -57,7 +57,7 @@ export function spawnAlienSurvivor(state, x, y, rng, waterY) {
     vx: rng.float(-4, 4),
     vy: 0,
     animTimer: 0,
-    life: rng.float(25, 50),
+    life: rng.float(10, 18), // short lifespan — they don't survive long in the swamp
     alive: true,
     hp: 3,
     huntTimer: 0,
