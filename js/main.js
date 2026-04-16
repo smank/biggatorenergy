@@ -9,7 +9,7 @@ import { lifecycleSystem } from './systems/lifecycle.js';
 import { breedingSystem, inheritTraits } from './systems/breeding.js';
 import { predatorSystem, scarePredators } from './systems/predator.js';
 import { createEnvironment, environmentSystem, renderCelestial, renderEnvironmentEffects, getSeasonText } from './systems/environment.js';
-import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI } from './systems/render.js';
+import { drawSprite, drawPixelText, renderSky, renderRainbow, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI } from './systems/render.js';
 import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
@@ -1147,6 +1147,7 @@ function gameLoop(timestamp) {
 
   renderSky(ctx, waterY, simTime, env);
   renderCelestial(ctx, env, waterY, simTime);
+  renderRainbow(ctx, vegState, waterY);
   renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);
 

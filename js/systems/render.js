@@ -609,29 +609,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
     }
   }
 
-  // --- RAINBOW — arcs across the sky after surprise ---
-  if (vg.rainbow && vg.rainbow.timer > 0) {
-    vg.rainbow.timer -= 0.016;
-    vg.rainbow.opacity = Math.min(0.12, vg.rainbow.opacity + 0.016 * 0.02);
-    if (vg.rainbow.timer < 3) vg.rainbow.opacity *= 0.97;
-    if (vg.rainbow.timer <= 0) vg.rainbow = null;
-    else {
-      const colors = ['#ff000030', '#ff880030', '#ffff0030', '#00ff0030', '#0088ff30', '#4400ff30', '#8800ff30'];
-      const cx = CANVAS_W * 0.5;
-      const cy = waterY * 0.8;
-      const baseR = 50;
-      for (let ci = 0; ci < colors.length; ci++) {
-        ctx.fillStyle = colors[ci];
-        const r = baseR + ci * 2;
-        for (let a = 0; a < Math.PI; a += 0.03) {
-          const rx = cx + Math.cos(a) * r;
-          const ry = cy - Math.sin(a) * r * 0.5;
-          if (ry > 2 && ry < waterY) {
-            ctx.fillRect(Math.floor(rx), Math.floor(ry), 1, 1);
-          }
-        }
-      }
-    }
+  // Rainbow moved to renderRainbow — called before terrain in the pipeline
   }
 
   // --- FLOATING LOGS / DEBRIS ---
@@ -1193,6 +1171,32 @@ export function renderUnderwaterLife(ctx, waterY, simTime, vegRng) {
     // claws
     ctx.fillRect(Math.floor(crx) - 1, cry - 1, 1, 1);
     ctx.fillRect(Math.floor(crx) + 2, cry - 1, 1, 1);
+  }
+}
+
+// Rainbow — rendered in sky layer, behind terrain and trees
+export function renderRainbow(ctx, vegState, waterY) {
+  const vg = vegState || {};
+  if (!vg.rainbow || vg.rainbow.timer <= 0) return;
+  vg.rainbow.timer -= 0.016;
+  vg.rainbow.opacity = Math.min(0.12, vg.rainbow.opacity + 0.016 * 0.02);
+  if (vg.rainbow.timer < 3) vg.rainbow.opacity *= 0.97;
+  if (vg.rainbow.timer <= 0) { vg.rainbow = null; return; }
+
+  const colors = ['#ff000030', '#ff880030', '#ffff0030', '#00ff0030', '#0088ff30', '#4400ff30', '#8800ff30'];
+  const cx = CANVAS_W * 0.5;
+  const cy = waterY * 0.6;
+  const baseR = 55;
+  for (let ci = 0; ci < colors.length; ci++) {
+    ctx.fillStyle = colors[ci];
+    const r = baseR + ci * 2;
+    for (let a = 0; a < Math.PI; a += 0.03) {
+      const rx = cx + Math.cos(a) * r;
+      const ry = cy - Math.sin(a) * r * 0.5;
+      if (ry > 2 && ry < waterY) {
+        ctx.fillRect(Math.floor(rx), Math.floor(ry), 1, 1);
+      }
+    }
   }
 }
 
