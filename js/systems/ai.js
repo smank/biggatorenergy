@@ -182,6 +182,8 @@ export function aiSystem(world, dt, rng, waterY) {
         const sizeScale = gator.sizeScale || 1;
         const eatRange = (gator.spriteW || 20) * 0.4 * sizeScale;
         if (dist < eatRange) {
+          // Face the prey
+          tr.direction = (prey.tr.x - tr.x) > 0 ? 1 : -1;
           prey.prey.alive = false;
           world.kill(prey.id);
           gator.frame = 'eat';

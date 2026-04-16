@@ -585,6 +585,8 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
                 (target.gator.stage === 'adult' || target.gator.stage === 'elder' ? 1.5 : 0.6);
               const hunterPower = rng.float(0.4, 1.2);
               if (gatorPower > hunterPower) {
+                // Face the hunter
+                target.tr.direction = (w.x - target.tr.x) > 0 ? 1 : -1;
                 w.alive = false;
                 target.gator.hunger = Math.max(0, target.gator.hunger - 0.4);
                 target.gator.frame = 'eat';
@@ -675,6 +677,8 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
           }
           // else gator overpowers alien — fall through to eating
         }
+        // Face the prey
+        tr.direction = (w.x - tr.x) > 0 ? 1 : -1;
         w.alive = false;
         const mealValue = w.type === 'deer' ? 0.4 : w.type === 'alien' ? 0.3 : 0.2;
         gator.hunger = Math.max(0, gator.hunger - mealValue);
