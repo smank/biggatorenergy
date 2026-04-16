@@ -1137,6 +1137,21 @@ function gameLoop(timestamp) {
   renderFires(ctx, fireState, simTime);
   renderEvents(ctx, events, simTime, waterY);
   renderEnvironmentEffects(ctx, env, waterY, simTime);
+
+  // Heat shimmer — wavy pixel displacement above ground during peak sun
+  const tod = env.timeOfDay;
+  const noonIntensity = (tod > 0.35 && tod < 0.65) ? 1 - Math.abs(tod - 0.5) * 6.67 : 0;
+  if (noonIntensity > 0.1 && env.weather === 'clear') {
+    const shimmerZone = waterY - 15; // shimmer near the ground
+    for (let y = shimmerZone; y < waterY; y++) {
+      const offset = Math.round(Math.sin(y * 0.8 + simTime * 4) * noonIntensity * 1.5);
+      if (offset !== 0) {
+        // Shift this row horizontally by copying it onto itself offset
+        ctx.drawImage(canvas, 0, y, CANVAS_W, 1, offset, y, CANVAS_W, 1);
+      }
+    }
+  }
+
   renderFullUI(ctx, simTime);
 
   // GAME OVER screen

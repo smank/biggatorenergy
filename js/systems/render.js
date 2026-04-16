@@ -93,31 +93,47 @@ export function drawPixelText(ctx, text, x, y) {
 export function renderSky(ctx, waterY, simTime, env) {
   const tod = env ? env.timeOfDay : 0.5;
 
-  // Sky colors shift with time of day
+  // Sky palette varies through the full day cycle
+  // Night: dark navy. Dawn: warm peach→blue. Day: bright blue fading to hazy horizon.
+  // Noon: brightest. Dusk: orange→purple→navy.
   let skyTop, skyMid, skyBottom;
 
+  // Noon brightness: peaks at tod=0.5, fades toward dawn/dusk
+  const noonFactor = tod > 0.25 && tod < 0.75 ? 1 - Math.abs(tod - 0.5) * 4 : 0; // 0-1, peaks at noon
+
+  // Bright daytime sky colors — actual blue, not swamp green
+  const dayTop = lerpColor('#5a7a8a', '#6a99cc', noonFactor); // hazy blue → bright blue
+  const dayMid = lerpColor('#7a9a8a', '#88aacc', noonFactor);
+  const dayBottom = lerpColor('#8aaa90', '#99bbcc', noonFactor);
+
   if (tod < 0.15 || tod > 0.85) {
-    // Deep night — dark blue/black
-    skyTop = '#0a0a1a';
-    skyMid = '#0e1020';
-    skyBottom = '#121828';
+    // Deep night
+    skyTop = '#080810';
+    skyMid = '#0c0c18';
+    skyBottom = '#101020';
   } else if (tod < 0.25) {
-    // Dawn transition
+    // Dawn — warm transition from night to day
     const t = (tod - 0.15) / 0.1;
-    skyTop = lerpColor('#0a0a1a', COLORS.skyTop, t);
-    skyMid = lerpColor('#0e1020', COLORS.skyMid, t);
-    skyBottom = lerpColor('#121828', COLORS.skyBottom, t);
+    const dawnTop = lerpColor('#1a1028', '#6a5a6a', t); // purple pre-dawn
+    const dawnMid = lerpColor('#1a1020', '#aa7755', t);  // warm peach
+    const dawnBottom = lerpColor('#101020', '#cc9966', t); // golden horizon
+    skyTop = lerpColor(dawnTop, dayTop, t * t); // ease into blue
+    skyMid = lerpColor(dawnMid, dayMid, t * t);
+    skyBottom = lerpColor(dawnBottom, dayBottom, t * t);
   } else if (tod > 0.75) {
-    // Dusk transition
+    // Dusk — warm transition from day to night
     const t = (tod - 0.75) / 0.1;
-    skyTop = lerpColor(COLORS.skyTop, '#0a0a1a', t);
-    skyMid = lerpColor(COLORS.skyMid, '#0e1020', t);
-    skyBottom = lerpColor(COLORS.skyBottom, '#121828', t);
+    const duskTop = lerpColor(dayTop, '#2a1a3a', t);     // purple twilight
+    const duskMid = lerpColor(dayMid, '#aa5533', 1 - t * t); // hold orange longer
+    const duskBottom = lerpColor(dayBottom, '#cc6633', 1 - t * t);
+    skyTop = lerpColor(dayTop, '#080810', t);
+    skyMid = t < 0.5 ? duskMid : lerpColor(duskMid, '#0c0c18', (t - 0.5) * 2);
+    skyBottom = t < 0.5 ? duskBottom : lerpColor(duskBottom, '#101020', (t - 0.5) * 2);
   } else {
-    // Daytime
-    skyTop = COLORS.skyTop;
-    skyMid = COLORS.skyMid;
-    skyBottom = COLORS.skyBottom;
+    // Full daytime — brighter at noon
+    skyTop = dayTop;
+    skyMid = dayMid;
+    skyBottom = dayBottom;
   }
 
   const bands = [
@@ -128,6 +144,13 @@ export function renderSky(ctx, waterY, simTime, env) {
   for (const band of bands) {
     ctx.fillStyle = band.color;
     ctx.fillRect(0, band.y, CANVAS_W, band.h);
+  }
+
+  // Noon brightness wash — subtle white overlay at peak sun
+  if (noonFactor > 0.3) {
+    const washAlpha = (noonFactor - 0.3) * 0.08;
+    ctx.fillStyle = `rgba(255, 255, 240, ${washAlpha})`;
+    ctx.fillRect(0, 0, CANVAS_W, waterY);
   }
 }
 
