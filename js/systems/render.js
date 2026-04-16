@@ -249,7 +249,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   // --- TALL CYPRESS / SWAMP TREES ---
   const treeZones = []; // track canopy positions for orchid anchoring
   const destroyed = (vg.destroyedTrees || []);
-  const numTrees = Math.floor(vegRng.range(5, 9) * vg.treeGrowth);
+  const numTrees = vegRng.range(5, 9); // fixed count from seed, growth controls canopy size
   for (let i = 0; i < numTrees; i++) {
     const x = vegRng.range(8, CANVAS_W - 8);
     const groundY = terrain[x];
@@ -308,7 +308,7 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
 
       // Canopy — big, irregular, layered
       const canopyY = groundY - trunkH;
-      const canopyW = Math.floor(vegRng.range(12, 22) * vg.treeGrowth);
+      const canopyW = vegRng.range(12, 22); // fixed from seed
       const canopyH = vegRng.range(6, 12);
       treeZones.push({ x, canopyY, canopyW, canopyH });
 
@@ -441,13 +441,15 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   }
 
   // --- DENSE GRASS & REEDS ---
-  for (let i = 0; i < Math.floor(25 * vg.undergrowth); i++) {
+  for (let i = 0; i < 25; i++) {
     const x = vegRng.range(0, CANVAS_W - 1);
     const groundY = terrain[x];
+    const showGrass = i < 25 * vg.undergrowth; // growth controls visibility, not loop count
     if (groundY < waterY + 2) {
       const sway = (Math.sin(simTime * 1.5 + x * 0.5) * 0.5 + windDir * 0.2) * windMult;
       const h = vegRng.range(2, 5);
       ctx.fillStyle = vegRng.chance(0.5) ? '#4a7a2e' : '#3a6a22';
+      if (!showGrass) continue; // skip draw but RNG was consumed
       for (let dy = 0; dy < h; dy++) {
         const s = Math.round(sway * (dy / h));
         ctx.fillRect(x + s, groundY - dy - 1, 1, 1);
@@ -456,12 +458,14 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   }
 
   // --- CATTAILS (thicker) ---
-  for (let i = 0; i < Math.floor(12 * vg.growth); i++) {
+  for (let i = 0; i < 12; i++) {
     const x = vegRng.range(0, CANVAS_W - 1);
     const groundY = terrain[x];
+    const showCattail = i < 12 * vg.growth;
     if (Math.abs(groundY - waterY) < 10) {
       const height = vegRng.range(8, 15);
       const sway = (Math.sin(simTime * 0.8 + x * 0.3) * 0.7 + windDir * 0.4) * windMult;
+      if (!showCattail) continue;
       ctx.fillStyle = '#5a4a2a';
       for (let dy = 0; dy < height; dy++) {
         const swayOffset = Math.round(sway * (dy / height));
@@ -733,11 +737,13 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
 
   // --- LAND FLOWERS (wildflowers) ---
   const flowerColors = ['#aa44cc', '#cc44aa', '#ffdd44', '#ff4444', '#ff6644', '#ffffff', '#eeddff', '#ffaaaa'];
-  for (let i = 0; i < Math.floor(20 * vg.flowerBloom); i++) {
+  for (let i = 0; i < 20; i++) {
     const x = vegRng.range(5, CANVAS_W - 5);
     const groundY = terrain[x];
+    const showFlower = i < 20 * vg.flowerBloom;
     if (groundY < waterY) {
       const colorIdx = vegRng.range(0, flowerColors.length - 1);
+      if (!showFlower) continue; // skip draw but RNG consumed
       const sway = Math.sin(simTime * 1.2 + x * 0.7 + i) * 0.3;
       const sx = Math.round(sway);
       // Stem
@@ -786,13 +792,15 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   }
 
   // --- FERNS ---
-  for (let i = 0; i < Math.floor(14 * vg.undergrowth); i++) {
+  for (let i = 0; i < 14; i++) {
     const x = vegRng.range(5, CANVAS_W - 5);
     const groundY = terrain[x];
+    const showFern = i < 14 * vg.undergrowth;
     if (groundY < waterY) {
+      const fernColor = vegRng.chance(0.5) ? '#2a6a22' : '#3a7a2a'; // consume RNG always
+      if (!showFern) continue;
       const sway = Math.sin(simTime * 0.8 + x * 0.4 + i * 1.3) * 0.4;
       const sx = Math.round(sway);
-      const fernColor = vegRng.chance(0.5) ? '#2a6a22' : '#3a7a2a';
       ctx.fillStyle = fernColor;
       // Triangular fern shape, 3-4px tall
       const h = vegRng.range(3, 4);
