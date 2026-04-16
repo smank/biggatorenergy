@@ -272,6 +272,7 @@ export function playSplash(intensity = 0.5) {
 // --- Thunder ---
 export function playThunder(distance = 0.5) {
   if (!ctx) return;
+  duckAudioBriefly();
   // distance 0 = close (loud), 1 = far (quiet, delayed)
   const delay = distance * 1.5;
   const t = ctx.currentTime + delay;
@@ -449,6 +450,47 @@ function playDeepCall() {
   lfo.start();
   osc.stop(ctx.currentTime + 2.1);
   lfo.stop(ctx.currentTime + 2.1);
+}
+
+// --- Gator Stare (subtle low drone) ---
+export function playGatorStare() {
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 60;
+  g.gain.setValueAtTime(0.01, ctx.currentTime);
+  g.gain.setValueAtTime(0.01, ctx.currentTime + 0.7);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
+  osc.connect(g);
+  g.connect(masterGain);
+  osc.start();
+  osc.stop(ctx.currentTime + 1.05);
+}
+
+// --- Egg Hatch (quick high chirp) ---
+export function playEggHatch() {
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(2000, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 0.15);
+  g.gain.setValueAtTime(0.02, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+  osc.connect(g);
+  g.connect(masterGain);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.2);
+}
+
+// --- Duck Audio Briefly (thunder compression effect) ---
+export function duckAudioBriefly() {
+  if (!ctx || !masterGain) return;
+  const savedGain = muted ? 0 : 0.3;
+  masterGain.gain.setValueAtTime(0.1, ctx.currentTime);
+  masterGain.gain.setValueAtTime(0.1, ctx.currentTime + 0.3);
+  masterGain.gain.linearRampToValueAtTime(savedGain, ctx.currentTime + 0.8);
 }
 
 // --- Ambient sound scheduler (called from game loop) ---

@@ -13,7 +13,7 @@ import { drawSprite, drawPixelText, renderSky, renderTerrain, renderWater, rende
 import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
-import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch } from './audio.js';
+import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch, playGatorStare, playEggHatch } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
@@ -750,13 +750,12 @@ function renderPredators(ctx, world) {
 
 
 // --- Extended UI ---
+let tickerOffset = 0;
+
 function renderFullUI(ctx, simTime) {
   ctx.fillStyle = '#334433';
 
-  // Bottom left: pop and generation
   const gatorCount = world.count('gator');
-  drawPixelText(ctx, `pop:${gatorCount}`, 2, CANVAS_H - 6);
-  drawPixelText(ctx, `gen:${maxGeneration}`, 2, CANVAS_H - 13);
 
   // Top left: god mode indicator
   if (isGodMode()) {
@@ -769,33 +768,31 @@ function renderFullUI(ctx, simTime) {
     drawPixelText(ctx, `[${powerIdx + 1}]`, 2 + (5 + powerName.length) * 4, 3);
   }
 
-  // Bottom right: seed and season
-  const seedText = `seed:${seed.length > 12 ? seed.slice(-12) : seed}`;
-  drawPixelText(ctx, seedText, CANVAS_W - seedText.length * 4 - 2, CANVAS_H - 6);
-
-  // Season + day count + moon phase
-  const moonPhases = ['new', 'wax', 'half', 'gib', 'full', 'gib', 'half', 'wan'];
-  const moonIndex = Math.floor((env.lunarPhase || 0) * 8) % 8;
-  const epochName = EPOCH_NAMES[vegState.epoch] || '';
-  const infoText = `${env.season} d${env.dayCount || 0}`;
   // Show epoch in top-right when not in god mode
+  const epochName = EPOCH_NAMES[vegState.epoch] || '';
   if (!isGodMode() && vegState.epoch > 0) {
     const epochLabel = `era:${epochName}`;
     ctx.fillStyle = '#3a4a3a';
     drawPixelText(ctx, epochLabel, CANVAS_W - epochLabel.length * 4 - 2, 3);
   }
+
   // Mute indicator
   if (isMuted()) {
     ctx.fillStyle = '#554444';
-    drawPixelText(ctx, 'muted', 2, CANVAS_H - 20);
+    drawPixelText(ctx, 'muted', 2, CANVAS_H - 13);
   }
-  drawPixelText(ctx, infoText, CANVAS_W - infoText.length * 4 - 2, CANVAS_H - 13);
 
-  // Weather indicator
-  if (env.weather !== 'clear') {
-    const weatherText = env.weather;
-    ctx.fillStyle = env.weather === 'storm' ? '#554444' : '#334433';
-    drawPixelText(ctx, weatherText, CANVAS_W - weatherText.length * 4 - 2, CANVAS_H - 20);
+  // --- Live ticker (scrolling bar at very bottom) ---
+  const tickerText = `LIVE -- BIG GATOR ENERGY SWAMP CAM -- EST. 2026 -- POP: ${gatorCount} -- GEN: ${maxGeneration} -- DAY ${env.dayCount || 0} -- ${env.season.toUpperCase()} -- ${env.weather !== 'clear' ? env.weather.toUpperCase() + ' -- ' : ''}SEED: ${seed.length > 12 ? seed.slice(-12) : seed} --  `;
+  const charW = 4; // each pixel-font char is 3px wide + 1px gap
+  const textPixelW = tickerText.length * charW;
+  tickerOffset = (simTime * 20) % textPixelW; // 20px/sec scroll driven by simTime
+  const tickerY = CANVAS_H - 6;
+  ctx.fillStyle = '#2a3a2a';
+  // Draw the ticker text twice for seamless wrap
+  const startX = -tickerOffset;
+  for (let ox = startX; ox < CANVAS_W; ox += textPixelW) {
+    drawPixelText(ctx, tickerText, Math.floor(ox), tickerY);
   }
 
   // Cursor glow — only in god mode
@@ -973,7 +970,7 @@ function gameLoop(timestamp) {
 
   const frameVegRng = createRNG(rng._seed + 999);
 
-  renderSky(ctx, waterY, simTime);
+  renderSky(ctx, waterY, simTime, env);
   renderCelestial(ctx, env, waterY, simTime);
   renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);

@@ -116,12 +116,44 @@ export function environmentSystem(env, dt, rng) {
     env.rainDrops.splice(0, env.rainDrops.length - 80);
   }
 
-  // Stars (generated once, visible at night)
+  // Stars (generated once, visible at night) — constellation patterns + fill
   if (env.stars.length === 0) {
-    for (let i = 0; i < 30; i++) {
+    // Constellation definitions: offsets from center point
+    const bigDipper = [
+      {x:0,y:0},{x:4,y:-1},{x:8,y:0},{x:12,y:2},  // bowl
+      {x:16,y:1},{x:21,y:-1},{x:26,y:-3}            // handle
+    ];
+    const orion = [
+      {x:0,y:0},{x:12,y:1},           // shoulders
+      {x:4,y:6},{x:6,y:6},{x:8,y:6},  // belt
+      {x:2,y:12},{x:10,y:13}          // knees
+    ];
+    const cassiopeia = [
+      {x:0,y:0},{x:5,y:4},{x:10,y:1},{x:15,y:5},{x:20,y:2}
+    ];
+
+    // Place each constellation at a seeded position across the sky
+    const constellations = [
+      { pattern: bigDipper,   cx: rng.range(20, 70),   cy: rng.range(6, 18) },
+      { pattern: orion,       cx: rng.range(100, 160),  cy: rng.range(4, 14) },
+      { pattern: cassiopeia,  cx: rng.range(190, 240),  cy: rng.range(5, 16) },
+    ];
+
+    for (const c of constellations) {
+      for (const s of c.pattern) {
+        env.stars.push({
+          x: c.cx + s.x,
+          y: c.cy + s.y,
+          twinkle: rng.float(0, Math.PI * 2),
+        });
+      }
+    }
+
+    // Fill stars for atmosphere
+    for (let i = 0; i < 15; i++) {
       env.stars.push({
         x: rng.range(0, CANVAS_W),
-        y: rng.range(0, 40),
+        y: rng.range(0, 30),
         twinkle: rng.float(0, Math.PI * 2),
       });
     }
@@ -282,8 +314,8 @@ export function renderEnvironmentEffects(ctx, env, waterY, simTime) {
       : (tod - 0.8) / 0.2;
 
     const moonBrightness = 1 - Math.abs((env.lunarPhase || 0) - 0.5) * 1.5;
-    const darkness = nightStrength * (0.5 - moonBrightness * 0.15);
-    ctx.fillStyle = `rgba(5, 5, 25, ${darkness})`;
+    const darkness = nightStrength * (0.65 - moonBrightness * 0.12);
+    ctx.fillStyle = `rgba(3, 3, 18, ${darkness})`;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   }
 

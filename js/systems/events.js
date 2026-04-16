@@ -521,7 +521,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
           life: rng.float(0.5, 1.5),
         });
       }
-    } else if (roll < 0.50 && !events.eclipse) {
+    } else if (roll < 0.42 && !events.eclipse) {
       // Eclipse
       events.eclipse = {
         timer: rng.float(8, 15),
@@ -529,17 +529,17 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         x: CANVAS_W * 0.5 + rng.float(-30, 30),
         y: rng.float(5, 20),
       };
-    } else if (roll < 0.58 && events.onStartFire) {
+    } else if (roll < 0.52 && events.onStartFire) {
       // Wildfire — spontaneous combustion in dry season
       events.onStartFire(rng.float(15, CANVAS_W - 15), waterY - rng.range(3, 8), rng);
-    } else if (roll < 0.66 && !events.flood) {
+    } else if (roll < 0.62 && !events.flood) {
       // Flash flood — water rises temporarily
       events.flood = {
         timer: rng.float(8, 15),
         intensity: rng.float(5, 15), // pixels of water rise
         progress: 0,
       };
-    } else if (roll < 0.74 && !events.hurricane) {
+    } else if (roll < 0.70 && !events.hurricane) {
       // Hurricane — extreme wind, rain, everything moves
       events.hurricane = {
         timer: rng.float(8, 20),
@@ -548,7 +548,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
       env.weather = 'storm';
       env.rainIntensity = 1.0;
       env.weatherTimer = 20;
-    } else if (roll < 0.80 && !events.tornado) {
+    } else if (roll < 0.76 && !events.tornado) {
       // Tornado — rare, devastating funnel crossing the screen
       events.tornado = {
         x: rng.chance(0.5) ? -10 : CANVAS_W + 10,
@@ -558,7 +558,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         timer: rng.float(10, 20),
         debris: [],
       };
-    } else if (roll < 0.88 && !events.fog) {
+    } else if (roll < 0.85 && !events.fog) {
       // Fog — thick swamp fog rolls in
       const duration = rng.float(10, 25);
       events.fog = {

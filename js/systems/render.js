@@ -90,16 +90,54 @@ export function drawPixelText(ctx, text, x, y) {
 
 // --- Background Rendering ---
 
-export function renderSky(ctx, waterY, simTime) {
+export function renderSky(ctx, waterY, simTime, env) {
+  const tod = env ? env.timeOfDay : 0.5;
+
+  // Sky colors shift with time of day
+  let skyTop, skyMid, skyBottom;
+
+  if (tod < 0.15 || tod > 0.85) {
+    // Deep night — dark blue/black
+    skyTop = '#0a0a1a';
+    skyMid = '#0e1020';
+    skyBottom = '#121828';
+  } else if (tod < 0.25) {
+    // Dawn transition
+    const t = (tod - 0.15) / 0.1;
+    skyTop = lerpColor('#0a0a1a', COLORS.skyTop, t);
+    skyMid = lerpColor('#0e1020', COLORS.skyMid, t);
+    skyBottom = lerpColor('#121828', COLORS.skyBottom, t);
+  } else if (tod > 0.75) {
+    // Dusk transition
+    const t = (tod - 0.75) / 0.1;
+    skyTop = lerpColor(COLORS.skyTop, '#0a0a1a', t);
+    skyMid = lerpColor(COLORS.skyMid, '#0e1020', t);
+    skyBottom = lerpColor(COLORS.skyBottom, '#121828', t);
+  } else {
+    // Daytime
+    skyTop = COLORS.skyTop;
+    skyMid = COLORS.skyMid;
+    skyBottom = COLORS.skyBottom;
+  }
+
   const bands = [
-    { color: COLORS.skyTop, y: 0, h: Math.floor(waterY * 0.4) },
-    { color: COLORS.skyMid, y: Math.floor(waterY * 0.4), h: Math.floor(waterY * 0.35) },
-    { color: COLORS.skyBottom, y: Math.floor(waterY * 0.75), h: waterY - Math.floor(waterY * 0.75) },
+    { color: skyTop, y: 0, h: Math.floor(waterY * 0.4) },
+    { color: skyMid, y: Math.floor(waterY * 0.4), h: Math.floor(waterY * 0.35) },
+    { color: skyBottom, y: Math.floor(waterY * 0.75), h: waterY - Math.floor(waterY * 0.75) },
   ];
   for (const band of bands) {
     ctx.fillStyle = band.color;
     ctx.fillRect(0, band.y, CANVAS_W, band.h);
   }
+}
+
+function lerpColor(a, b, t) {
+  const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16), bg = parseInt(b.slice(3, 5), 16), bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return '#' + [r, g, bl].map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
 }
 
 export function renderTerrain(ctx, terrain, waterY) {
