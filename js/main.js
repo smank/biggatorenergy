@@ -19,10 +19,22 @@ import { createParticleState, spawnDeathParticles, updateDeathParticles, renderD
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
 
 // --- Seed ---
+// Priority: URL hash > localStorage last seed > new random seed
 const urlSeed = seedFromHash();
-const seed = urlSeed || String(Date.now());
+let seed;
+if (urlSeed) {
+  seed = urlSeed;
+} else {
+  // Check if we have a previous seed saved
+  try {
+    seed = localStorage.getItem('idlegator_lastSeed') || String(Date.now());
+  } catch (e) {
+    seed = String(Date.now());
+  }
+}
 const rng = createRNG(seed);
-if (!urlSeed) window.location.hash = `seed=${seed}`;
+window.location.hash = `seed=${seed}`;
+try { localStorage.setItem('idlegator_lastSeed', seed); } catch (e) {}
 
 // --- Canvas ---
 const canvas = document.getElementById('game');
