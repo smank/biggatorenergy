@@ -18,8 +18,13 @@ let ambientDrone = null;
 let rainNode = null;
 let rainGain = null;
 
+let audioUnavailable = false;
+let listenersAttached = false;
+
 export function initAudio() {
-  // Set up persistent listeners — retry audio resume on EVERY interaction
+  if (listenersAttached) return;
+  listenersAttached = true;
+  // Persistent listeners — retry on every interaction
   // In-app browsers (Instagram, TikTok) often swallow the first event
   for (const evt of ['touchstart', 'touchend', 'click', 'pointerdown', 'keydown']) {
     document.addEventListener(evt, resumeAudio, { passive: true });
@@ -27,13 +32,18 @@ export function initAudio() {
 }
 
 export function resumeAudio() {
+  if (audioUnavailable) return;
   if (!ctx) {
     try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error('Web Audio API unavailable');
+      ctx = new AC();
       masterGain = ctx.createGain();
       masterGain.gain.value = muted ? 0 : 0.3;
       masterGain.connect(ctx.destination);
     } catch (e) {
+      audioUnavailable = true;
+      if (typeof console !== 'undefined') console.warn('[bge] audio unavailable:', e.message);
       return;
     }
   }
@@ -42,7 +52,7 @@ export function resumeAudio() {
   }
   if (!started && ctx.state === 'running') {
     started = true;
-    startAmbientDrone();
+    try { startAmbientDrone(); } catch (e) { /* keep audio ctx alive even if drone fails */ }
   }
 }
 

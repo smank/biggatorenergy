@@ -38,7 +38,15 @@ try { localStorage.setItem('idlegator_lastSeed', seed); } catch (e) {}
 
 // --- Canvas ---
 const canvas = document.getElementById('game');
+if (!canvas) {
+  document.body.innerHTML = '<p style="color:#6a8a5a;font-family:monospace;padding:1em;">canvas element missing</p>';
+  throw new Error('Canvas element not found');
+}
 const ctx = canvas.getContext('2d');
+if (!ctx) {
+  document.body.innerHTML = '<p style="color:#6a8a5a;font-family:monospace;padding:1em;">your browser cannot render this swamp</p>';
+  throw new Error('Canvas 2D context unavailable');
+}
 canvas.width = CANVAS_W;
 canvas.height = CANVAS_H;
 ctx.imageSmoothingEnabled = false;
@@ -86,7 +94,9 @@ function checkOrientation() {
 checkOrientation();
 // Listen to everything — some subset will fire in any given browser
 window.addEventListener('resize', checkOrientation);
-if (screen.orientation) screen.orientation.addEventListener('change', checkOrientation);
+if (screen.orientation && typeof screen.orientation.addEventListener === 'function') {
+  screen.orientation.addEventListener('change', checkOrientation);
+}
 window.addEventListener('orientationchange', checkOrientation);
 // Touch can trigger a recheck — in-app browsers sometimes update dimensions on interaction
 document.addEventListener('touchstart', checkOrientation, { passive: true });
@@ -445,12 +455,17 @@ let simTime = 0;
 
 // --- Load Saved State or Fresh Start ---
 const savedState = persistence.load();
-if (savedState && savedState.gators && savedState.gators.length > 0) {
-  // Restore gators from save
+if (savedState && Array.isArray(savedState.gators) && savedState.gators.length > 0) {
+  // Restore gators with trait defaults — handles older saves missing newer trait fields
+  const TRAIT_DEFAULTS = { speed: 1, maxSize: 1, aggression: 0.5, fertility: 0.5, metabolism: 1 };
   for (const saved of savedState.gators) {
+    if (!saved || !saved.tr || !saved.gator) continue;
     const id = world.create();
-    world.add(id, 'transform', { ...saved.tr });
-    world.add(id, 'gator', { ...saved.gator, traits: { ...saved.gator.traits } });
+    world.add(id, 'transform', { vx: 0, vy: 0, direction: 1, ...saved.tr });
+    world.add(id, 'gator', {
+      ...saved.gator,
+      traits: { ...TRAIT_DEFAULTS, ...randomGatorColors(rng), ...(saved.gator.traits || {}) },
+    });
   }
   // Restore environment
   if (savedState.env) {
@@ -473,17 +488,22 @@ if (savedState && savedState.gators && savedState.gators.length > 0) {
     const numTicks = Math.floor(elapsed / tickDt);
     const cappedTicks = Math.min(numTicks, 4000);
 
-    for (let t = 0; t < cappedTicks; t++) {
-      environmentSystem(env, tickDt, rng);
-      aiSystem(world, tickDt, rng, waterY);
-      breedingSystem(world, tickDt, rng, waterY, spawnGatorFromParents);
-      lifecycleSystem(world, tickDt, rng);
-      physicsSystem(world, tickDt, terrain, waterY, rng);
-      world.flush();
-      simTime += tickDt;
-      if (world.count('gator') === 0) {
-        for (let i = 0; i < rng.range(3, 5); i++) spawnGator(rng, 'adult');
+    try {
+      for (let t = 0; t < cappedTicks; t++) {
+        environmentSystem(env, tickDt, rng);
+        aiSystem(world, tickDt, rng, waterY);
+        breedingSystem(world, tickDt, rng, waterY, spawnGatorFromParents);
+        lifecycleSystem(world, tickDt, rng);
+        physicsSystem(world, tickDt, terrain, waterY, rng);
+        world.flush();
+        simTime += tickDt;
+        if (world.count('gator') === 0) {
+          for (let i = 0; i < rng.range(3, 5); i++) spawnGator(rng, 'adult');
+        }
       }
+    } catch (e) {
+      // Fast-forward failed — accept current sim state and continue
+      if (typeof console !== 'undefined') console.warn('[bge] fast-forward aborted:', e.message);
     }
     // Vegetation catches up with the full elapsed time
     updateVegGrowth(elapsed);
@@ -771,8 +791,8 @@ function activatePower(x, y, type) {
       let bx = x;
       let by = 0;
       while (by < waterY + 10) {
-        const nextX = bx + (Math.random() - 0.5) * 10;
-        const nextY = by + 5 + Math.random() * 10;
+        const nextX = bx + (rng.random() - 0.5) * 10;
+        const nextY = by + 5 + rng.random() * 10;
         bolt.segments.push({ x1: bx, y1: by, x2: nextX, y2: nextY });
         bx = nextX;
         by = nextY;
@@ -782,7 +802,7 @@ function activatePower(x, y, type) {
       // Damage nearby gators slightly
       for (const [id, tr, gator] of world.query('transform', 'gator')) {
         if (Math.abs(tr.x + (gator.spriteW || 10) / 2 - x) < 6) {
-          if (Math.random() < 0.15) {
+          if (rng.chance(0.15)) {
             gator.health -= 0.5;
             if (gator.health <= 0) world.kill(id);
             break;
@@ -811,11 +831,11 @@ function activatePower(x, y, type) {
         // Spawn green heal particles
         for (let i = 0; i < 6; i++) {
           particles.deathParticles.push({
-            x: nearestTr.x + (Math.random() - 0.5) * 8,
-            y: nearestTr.y - Math.random() * 6,
-            vx: (Math.random() - 0.5) * 10,
-            vy: -Math.random() * 12 - 3,
-            life: 0.5 + Math.random() * 0.5,
+            x: nearestTr.x + rng.float(-4, 4),
+            y: nearestTr.y - rng.float(0, 6),
+            vx: rng.float(-5, 5),
+            vy: -rng.float(3, 15),
+            life: rng.float(0.5, 1.0),
             color: i % 2 === 0 ? '#44dd44' : '#88ff88',
           });
         }

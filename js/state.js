@@ -37,7 +37,10 @@ export function createPersistence(seed) {
       try {
         localStorage.setItem(key, JSON.stringify(state));
       } catch (e) {
-        // localStorage might be full or unavailable
+        // localStorage quota exceeded, disabled (private mode), or unavailable
+        if (typeof console !== 'undefined') {
+          console.warn('[bge] save failed:', e.message);
+        }
       }
     },
 
@@ -46,9 +49,13 @@ export function createPersistence(seed) {
         const raw = localStorage.getItem(key);
         if (!raw) return null;
         const state = JSON.parse(raw);
+        if (!state || typeof state !== 'object') return null;
         if (state.version !== 1) return null;
         return state;
       } catch (e) {
+        if (typeof console !== 'undefined') {
+          console.warn('[bge] saved state corrupt, starting fresh:', e.message);
+        }
         return null;
       }
     },
