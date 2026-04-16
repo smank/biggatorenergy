@@ -701,6 +701,23 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
         }
         // Face the prey
         tr.direction = (w.x - tr.x) > 0 ? 1 : -1;
+
+        // Large prey triggers death roll instead of instant eat
+        const DEATHROLL_PREY = ['deer', 'wild_boar', 'raccoon', 'nutria', 'beaver'];
+        if (DEATHROLL_PREY.includes(w.type) && gator.stage !== 'hatchling') {
+          gator.state = 'deathroll';
+          gator.stateTimer = 2.5;
+          gator.deathrollPrey = { x: w.x, y: w.y, type: w.type };
+          gator.frame = 'eat';
+          gator.deathrollWildlife = w; // keep reference to kill later
+          gator.deathrollRollTimer = 0.3;
+          // Store meal info for after the roll
+          gator.deathrollMealValue = w.type === 'deer' ? 0.4 : 0.2;
+          gator.deathrollMealCount = w.type === 'deer' ? 4 : 2;
+          playEat();
+          break;
+        }
+
         w.alive = false;
         const mealValue = w.type === 'deer' ? 0.4 : w.type === 'alien' ? 0.3 : 0.2;
         gator.hunger = Math.max(0, gator.hunger - mealValue);

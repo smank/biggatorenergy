@@ -84,7 +84,7 @@ export function aiSystem(world, dt, rng, waterY) {
       if (gator.frame === 'blink') {
         gator.frame = 'idle';
         gator.blinkTimer = rng.float(3, 8);
-      } else if (gator.state !== 'eating' && gator.state !== 'sleeping') {
+      } else if (gator.state !== 'eating' && gator.state !== 'sleeping' && gator.state !== 'deathroll') {
         gator.frame = 'blink';
         gator.blinkTimer = 0.15;
       } else {
@@ -222,6 +222,85 @@ export function aiSystem(world, dt, rng, waterY) {
         gator.energy = Math.min(1, gator.energy + dt * 0.05);
         if (gator.stateTimer <= 0 || gator.energy > 0.8) {
           gator.frame = 'idle';
+          transition(gator, 'idle', rng);
+        }
+        break;
+      }
+
+      case 'deathroll': {
+        gator.frame = 'eat'; // mouth open the whole time
+
+        // Drift toward water if on land
+        if (tr.y < waterY - 2) {
+          tr.vy = 8;
+        } else {
+          tr.vy *= 0.8;
+        }
+        // Slight horizontal drift toward center of water
+        tr.vx *= 0.9;
+
+        // Spin — alternate direction every 0.3s to simulate rolling
+        gator.deathrollRollTimer = (gator.deathrollRollTimer || 0.3) - dt;
+        if (gator.deathrollRollTimer <= 0) {
+          tr.direction = tr.direction === 1 ? -1 : 1;
+          gator.deathrollRollTimer = 0.3;
+        }
+
+        // Prey follows the gator's mouth
+        if (gator.deathrollPrey) {
+          const mouthOffsetX = tr.direction === 1 ? (gator.spriteW || 10) : 0;
+          gator.deathrollPrey.x = tr.x + mouthOffsetX;
+          gator.deathrollPrey.y = tr.y + 1;
+        }
+
+        if (gator.stateTimer <= 0) {
+          // Kill the prey now
+          if (gator.deathrollWildlife) {
+            gator.deathrollWildlife.alive = false;
+          }
+          // Apply meal rewards
+          gator.hunger = Math.max(0, gator.hunger - (gator.deathrollMealValue || 0.2));
+          gator.mealCount = (gator.mealCount || 0) + (gator.deathrollMealCount || 2);
+          const maxS = (gator.traits?.maxSize || 1) * 2.0;
+          gator.sizeScale = Math.min(maxS, 1 + gator.mealCount * 0.02);
+          // Clean up
+          gator.deathrollPrey = null;
+          gator.deathrollWildlife = null;
+          gator.deathrollMealValue = null;
+          gator.deathrollMealCount = null;
+          gator.deathrollRollTimer = null;
+          transition(gator, 'eating', rng);
+        }
+        break;
+      }
+
+      case 'guarding': {
+        // Stay near nest
+        if (gator.nest) {
+          const dxNest = gator.nest.x - tr.x;
+          if (Math.abs(dxNest) > 8) {
+            tr.vx = Math.sign(dxNest) * (gator.traits?.speed || 1) * 6;
+            tr.direction = dxNest > 0 ? 1 : -1;
+          } else {
+            tr.vx *= 0.85;
+          }
+          tr.vy *= 0.8;
+
+          // Hatch timer counts down
+          gator.nest.hatchTimer -= dt;
+
+          if (gator.nest.hatchTimer <= 0) {
+            // Hatch — spawn babies via callback stored on gator
+            gator.nestHatchReady = true; // breeding system handles actual spawning
+            gator.frame = 'idle';
+            transition(gator, 'idle', rng);
+          }
+        } else {
+          // Nest removed somehow
+          transition(gator, 'idle', rng);
+        }
+
+        if (gator.stateTimer <= 0 && !gator.nest) {
           transition(gator, 'idle', rng);
         }
         break;

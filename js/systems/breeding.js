@@ -115,24 +115,39 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
       gator.hunger += dt * 0.003;
 
       if (gator.pregnancyTimer <= 0) {
-        // Lay eggs — create nest
+        // Lay eggs — create nest mound
         gator.isPregnant = false;
         const clutchSize = Math.floor((gator.traits?.fertility || 0.5) * 4) + rng.range(1, 3);
 
-        for (let i = 0; i < clutchSize; i++) {
-          spawnGatorFromParents(
-            rng,
-            { x: tr.x + rng.float(-6, 6), y: waterY - rng.float(1, 4) },
-            gator.traits,
-            gator.mateTraits,
-            gator.generation
-          );
-        }
-
-        gator.mateTraits = null;
-        gator.state = 'idle';
-        gator.stateTimer = rng.float(3, 8);
+        gator.nest = {
+          x: tr.x,
+          y: waterY - 2,
+          eggs: clutchSize,
+          hatchTimer: EGG_INCUBATION,
+          parentTraits: gator.traits,
+          mateTraits: gator.mateTraits,
+          generation: gator.generation,
+        };
+        gator.state = 'guarding';
+        gator.stateTimer = 10;
       }
+    }
+
+    // Nest hatching — triggered by AI guarding state timer expiry
+    if (gator.nestHatchReady && gator.nest) {
+      const nest = gator.nest;
+      for (let i = 0; i < nest.eggs; i++) {
+        spawnGatorFromParents(
+          rng,
+          { x: nest.x + rng.float(-6, 6), y: nest.y - rng.float(0, 2) },
+          nest.parentTraits,
+          nest.mateTraits,
+          nest.generation
+        );
+      }
+      gator.nest = null;
+      gator.nestHatchReady = false;
+      gator.mateTraits = null;
     }
 
     // Fighting — males in close proximity with high aggression

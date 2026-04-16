@@ -194,6 +194,35 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   const hurricaneWind = env && env._hurricaneWind || 0;
   const windMult = hurricaneWind ? 4 + Math.abs(hurricaneWind) * 0.1 : isStorm ? 3 : isRain ? 1.8 : 1;
   const windDir = hurricaneWind ? Math.sign(hurricaneWind) : Math.sin(simTime * 0.3); // unified wind direction
+  // --- SEASONAL CANOPY PALETTE ---
+  const season = (env && env.season) || 'summer';
+  let canopyDark, canopyMid, canopyLight;
+  let canopyThinning = 1; // 1 = full, lower = sparser
+  let blossoms = false;
+  let fallingLeaves = false;
+  if (season === 'spring') {
+    canopyDark = '#2a5a1e';
+    canopyMid = '#3a7a28';
+    canopyLight = '#5a9a3a';
+    blossoms = true;
+  } else if (season === 'autumn') {
+    canopyDark = '#6a3a1a';
+    canopyMid = '#aa5a22';
+    canopyLight = '#cc7733';
+    canopyThinning = 0.75;
+    fallingLeaves = true;
+  } else if (season === 'winter') {
+    canopyDark = '#5a5a4a';
+    canopyMid = '#6a6a5a';
+    canopyLight = '#6a6a5a';
+    canopyThinning = 0.25;
+  } else {
+    // summer (default)
+    canopyDark = '#1a4a14';
+    canopyMid = '#2a6a1e';
+    canopyLight = '#3a8a28';
+  }
+
   // --- TALL CYPRESS / SWAMP TREES ---
   const treeZones = []; // track canopy positions for orchid anchoring
   const destroyed = (vg.destroyedTrees || []);
@@ -261,32 +290,56 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
       treeZones.push({ x, canopyY, canopyW, canopyH });
 
       // Dark canopy base
-      ctx.fillStyle = '#1a3a14';
+      ctx.fillStyle = canopyDark;
       for (let cy = 0; cy < canopyH; cy++) {
         const rowW = canopyW - Math.abs(cy - canopyH / 2) * 2.5 + vegRng.range(-3, 3);
-        if (rowW > 0) {
+        const darkShow = vegRng.chance(canopyThinning); // always consume RNG
+        if (rowW > 0 && darkShow) {
           const swayOff = Math.round(sway * 1.8);
           ctx.fillRect(x - Math.floor(rowW / 2) + swayOff, canopyY + cy - 3, Math.floor(rowW), 1);
         }
       }
       // Mid canopy
-      ctx.fillStyle = '#2a5a1e';
+      ctx.fillStyle = canopyMid;
       for (let cy = 1; cy < canopyH - 1; cy++) {
         const rowW = (canopyW - 4) - Math.abs(cy - canopyH / 2) * 2 + vegRng.range(-2, 2);
-        if (rowW > 0) {
+        const midShow = vegRng.chance(canopyThinning); // always consume RNG
+        if (rowW > 0 && midShow) {
           const swayOff = Math.round(sway * 1.5);
           ctx.fillRect(x - Math.floor(rowW / 2) + swayOff + 1, canopyY + cy - 2, Math.floor(rowW), 1);
         }
       }
       // Light leaf highlights
-      ctx.fillStyle = '#3a7a28';
+      ctx.fillStyle = canopyLight;
       for (let j = 0; j < 8; j++) {
         const lx = x + vegRng.range(-canopyW / 2 + 2, canopyW / 2 - 2);
         const ly = canopyY + vegRng.range(-2, canopyH - 3);
         ctx.fillRect(Math.floor(lx + sway * 1.5), ly, vegRng.range(1, 4), 1);
+        // Spring blossoms — pink/white flower dots on canopy (always consume RNG)
+        const doBlossom = vegRng.chance(0.15);
+        const blossomColor = vegRng.chance(0.5) ? '#ffbbcc' : '#ffffff';
+        if (blossoms && doBlossom) {
+          ctx.fillStyle = blossomColor;
+          ctx.fillRect(Math.floor(lx + sway * 1.5) + 1, ly, 1, 1);
+          ctx.fillStyle = canopyLight;
+        }
       }
 
-      // Spanish moss / hanging vines — lots of it
+      // Autumn falling leaf particles (always consume RNG for stability)
+      for (let fl = 0; fl < 3; fl++) {
+        const leafX = x + vegRng.range(-canopyW / 2, canopyW / 2);
+        const leafColor = vegRng.chance(0.5) ? '#cc7733' : '#aa4422';
+        if (fallingLeaves) {
+          const leafDrift = Math.sin(simTime * 1.5 + leafX * 0.5 + fl) * 3;
+          const leafFall = ((simTime * 8 + leafX * 3 + fl * 17) % 30);
+          if (leafFall < 25) {
+            ctx.fillStyle = leafColor;
+            ctx.fillRect(Math.floor(leafX + leafDrift), canopyY + canopyH + Math.floor(leafFall), 1, 1);
+          }
+        }
+      }
+
+      // Spanish moss / hanging vines — lots of it (less in winter)
       const numHangs = vegRng.range(4, 10);
       for (let m = 0; m < numHangs; m++) {
         const mx = x + vegRng.range(-canopyW / 2 + 1, canopyW / 2 - 1);
@@ -294,10 +347,15 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
         const mSway = Math.sin(simTime * 0.4 + mx * 0.3 + m) * 0.8;
         const isVine = vegRng.chance(0.3);
 
-        ctx.fillStyle = isVine ? '#3a5a2a' : '#5a7a5a';
-        for (let my = 0; my < mLen; my++) {
-          const mSwayOff = Math.round(mSway * (my / mLen));
-          ctx.fillRect(Math.floor(mx + mSwayOff), canopyY + canopyH - 3 + my, 1, 1);
+        // Winter: skip most moss/vines (always consume RNG for stability)
+        const mossRoll = vegRng.chance(0.7);
+        const skipMoss = season === 'winter' && mossRoll;
+        if (!skipMoss) {
+          ctx.fillStyle = isVine ? '#3a5a2a' : '#5a7a5a';
+          for (let my = 0; my < mLen; my++) {
+            const mSwayOff = Math.round(mSway * (my / mLen));
+            ctx.fillRect(Math.floor(mx + mSwayOff), canopyY + canopyH - 3 + my, 1, 1);
+          }
         }
         // Vine leaves
         if (isVine && mLen > 8) {
@@ -305,8 +363,10 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
           for (let vl = 0; vl < 3; vl++) {
             const vlY = canopyY + canopyH - 3 + vegRng.range(3, mLen - 2);
             const vlSway = Math.round(mSway * (vlY / mLen));
-            ctx.fillRect(Math.floor(mx + vlSway) - 1, vlY, 1, 1);
-            ctx.fillRect(Math.floor(mx + vlSway) + 1, vlY, 1, 1);
+            if (!skipMoss) {
+              ctx.fillRect(Math.floor(mx + vlSway) - 1, vlY, 1, 1);
+              ctx.fillRect(Math.floor(mx + vlSway) + 1, vlY, 1, 1);
+            }
           }
         }
       }
@@ -847,6 +907,47 @@ export function renderGators(ctx, world, simTime) {
           ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
           ctx.fillRect(sx, sy, sz, sz);
         }
+      }
+    }
+
+    // Death roll prey — draw small brown blob near gator's mouth
+    if (gator.state === 'deathroll' && gator.deathrollPrey) {
+      const preyX = Math.floor(gator.deathrollPrey.x);
+      const preyY = Math.floor(gator.deathrollPrey.y);
+      // Brown blob 3x2 for the prey being rolled
+      const preyColor = gator.deathrollPrey.type === 'deer' ? '#8B6914' : '#6B4226';
+      ctx.fillStyle = preyColor;
+      ctx.fillRect(preyX, preyY, 3, 2);
+      // Darker accent pixel
+      ctx.fillStyle = '#3D2B1F';
+      ctx.fillRect(preyX + 1, preyY, 1, 1);
+    }
+
+    // Nest mound — visible when gator has a nest
+    if (gator.nest) {
+      const nx = Math.floor(gator.nest.x);
+      const ny = Math.floor(gator.nest.y);
+      const guarding = gator.state === 'guarding';
+      // Mound base: 5x3 dark brown/mud
+      const mudColor = guarding ? '#6B5030' : '#5A4020';
+      const mudDark = guarding ? '#4A3520' : '#3D2B1F';
+      // Bottom row (widest)
+      ctx.fillStyle = mudDark;
+      ctx.fillRect(nx - 2, ny + 2, 5, 1);
+      // Middle row
+      ctx.fillStyle = mudColor;
+      ctx.fillRect(nx - 1, ny + 1, 3, 1);
+      // Top row
+      ctx.fillStyle = mudColor;
+      ctx.fillRect(nx - 1, ny, 3, 1);
+      // Egg dots on top — white/cream 1px each
+      const eggColor = '#FFFDE0';
+      const eggCount = Math.min(gator.nest.eggs, 5); // max 5 visible
+      for (let e = 0; e < eggCount; e++) {
+        const ex = nx - 1 + (e % 3);
+        const ey = ny + (e >= 3 ? 1 : 0);
+        ctx.fillStyle = eggColor;
+        ctx.fillRect(ex, ey, 1, 1);
       }
     }
 

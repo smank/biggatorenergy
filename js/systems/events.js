@@ -538,6 +538,8 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         timer: rng.float(8, 15),
         intensity: rng.float(5, 15), // pixels of water rise
         progress: 0,
+        currentDir: rng.chance(0.5) ? 1 : -1,
+        currentSpeed: rng.float(8, 15),
       };
     } else if (roll < 0.70 && !events.hurricane) {
       // Hurricane — extreme wind, rain, everything moves
@@ -632,6 +634,11 @@ function spawnLightning(events, rng, waterY, world) {
   // Lightning can start fires on land
   if (bx < CANVAS_W && events.onStartFire && rng.chance(0.3)) {
     events.onStartFire(bx, waterY - rng.range(2, 6), rng);
+  }
+
+  // Lightning can strike and ignite a tree
+  if (events.onLightningStrikeTree && rng.chance(0.25)) {
+    events.onLightningStrikeTree(x, rng);
   }
 }
 

@@ -267,6 +267,23 @@ events.onStartFire = (x, y, rng) => startFire(fireState, x, y, rng, waterY);
 events.onThunder = () => playThunder(Math.random() * 0.7);
 events.onExplosion = () => playExplosion();
 events.onGatorDeath = () => playDeathTone();
+events.onLightningStrikeTree = (lightningX, lRng) => {
+  // Recreate tree positions the same way the tornado does
+  const treeRng = createRNG(lRng._seed + 999);
+  const numTrees = Math.floor(treeRng.range(5, 9) * vegState.treeGrowth);
+  for (let i = 0; i < numTrees; i++) {
+    const treeX = treeRng.range(8, CANVAS_W - 8);
+    treeRng.range(0, 100); // consume RNG to stay aligned with render
+    const dist = Math.abs(treeX - lightningX);
+    if (dist < 10 && !vegState.destroyedTrees.includes(treeX)) {
+      vegState.destroyedTrees.push(treeX);
+      startFire(fireState, treeX, waterY - lRng.range(3, 8), lRng, waterY);
+      spawnDeathParticles(particles, treeX, waterY - 15, '#ff6622');
+      spawnDeathParticles(particles, treeX, waterY - 10, '#ff9944');
+      break; // only strike one tree per bolt
+    }
+  }
+};
 events.onTornadoPull = (tx, ty, range, dt, rng) => {
   for (const w of wildlifeState.wildlife) {
     if (!w.alive) continue;
@@ -600,6 +617,10 @@ const particles = createParticleState();
 
 // --- SKULL GRAVEYARD ---
 const skulls = [];
+
+// --- ANIMAL TRACKS ---
+const tracks = [];
+let trackSpawnTimer = 0;
 
 function addSkull(x, y) {
   if (skulls.length > 30) skulls.shift(); // remove oldest
@@ -960,6 +981,30 @@ function gameLoop(timestamp) {
     for (const [id, tr] of world.query('transform', 'prey')) { tr.x += wind * 0.5; }
   }
 
+  // Flood current — pushes submerged things sideways, extinguishes fires
+  if (events.flood && events.flood.progress > 2) {
+    const floodCurrent = events.flood.currentDir * events.flood.currentSpeed;
+    const floodWaterY = waterY - events.flood.progress;
+    // Wildlife drifts with current
+    for (const w of wildlifeState.wildlife) {
+      if (w.y > floodWaterY) {
+        w.x += floodCurrent * dt;
+      }
+    }
+    // Skulls drift slowly
+    for (const skull of skulls) {
+      if (skull.y > floodWaterY) {
+        skull.x += floodCurrent * dt * 0.5;
+      }
+    }
+    // Fires get extinguished by rising water
+    for (const fire of fireState.fires) {
+      if (fire.y > floodWaterY) {
+        fire.life -= dt * 5;
+      }
+    }
+  }
+
   // Rival gators
   rivalTimer -= dt;
   if (rivalTimer <= 0) {
@@ -1002,6 +1047,22 @@ function gameLoop(timestamp) {
     skull.age += dt;
   }
 
+  // Animal tracks — gators leave drag marks near the waterline
+  trackSpawnTimer -= dt;
+  if (trackSpawnTimer <= 0) {
+    trackSpawnTimer = 0.3;
+    for (const [id, tr, gator] of world.query('transform', 'gator')) {
+      if (Math.abs(tr.vx) > 2 && Math.abs(tr.y + gator.spriteH - waterY) < 5) {
+        tracks.push({ x: tr.x + gator.spriteW / 2, y: waterY - 1, age: 0 });
+        if (tracks.length > 40) tracks.shift();
+      }
+    }
+  }
+  for (let i = tracks.length - 1; i >= 0; i--) {
+    tracks[i].age += dt;
+    if (tracks[i].age > 20) tracks.splice(i, 1);
+  }
+
   // Harvest gator deaths — spawn skulls before flush removes them
   for (const deadId of world.dead) {
     if (world.has(deadId, 'gator')) {
@@ -1035,6 +1096,15 @@ function gameLoop(timestamp) {
   renderCelestial(ctx, env, waterY, simTime);
   renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);
+
+  // Gator drag marks — dark dots that fade over time
+  for (const track of tracks) {
+    ctx.globalAlpha = Math.max(0, 1 - track.age / 20);
+    ctx.fillStyle = '#3a3a2a';
+    ctx.fillRect(Math.floor(track.x), Math.floor(track.y), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
   renderWater(ctx, waterY, simTime);
   renderTheDeep(ctx, deepState, waterY, simTime);
   renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
@@ -1127,6 +1197,7 @@ canvas.addEventListener('pointerup', (e) => {
     fireState.fires.length = 0;
     particles.deathParticles.length = 0;
     skulls.length = 0;
+    tracks.length = 0;
     for (let i = 0; i < rng.range(4, 6); i++) {
       spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile']));
     }
