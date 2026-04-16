@@ -470,7 +470,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
 
   // Trigger new events — frequently, this swamp is chaotic
   if (events.eventTimer <= 0) {
-    events.eventTimer = rng.float(6, 18);
+    events.eventTimer = rng.float(15, 40);
     triggerRandomEvent(events, world, rng, waterY, simTime, env);
   }
 
@@ -488,13 +488,11 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
 function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
   const isNight = env.timeOfDay < 0.2 || env.timeOfDay > 0.8;
 
-  // Roll multiple times — sometimes multiple things happen at once
-  const numRolls = rng.range(1, 3);
-  for (let r = 0; r < numRolls; r++) {
-    const roll = rng.random();
+  const roll = rng.random();
 
-    if (roll < 0.15 && !events.ufo) {
-      // UFO abduction — fairly common in this swamp
+  {
+    if (roll < 0.04 && !events.ufo) {
+      // UFO — rare and memorable
       const targetX = rng.float(30, CANVAS_W - 30);
       events.ufo = {
         x: rng.chance(0.5) ? -20 : CANVAS_W + 20,
@@ -507,10 +505,10 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         victimId: null,
         lights: [rng.float(0, Math.PI * 2), rng.float(0, Math.PI * 2), rng.float(0, Math.PI * 2)],
       };
-    } else if (roll < 0.45) {
-      // Lightning strike
+    } else if (roll < 0.20) {
+      // Lightning strike (heat lightning)
       spawnLightning(events, rng, waterY, world);
-    } else if (roll < 0.65 && isNight) {
+    } else if (roll < 0.40 && isNight) {
       // Shooting stars — sometimes a burst of them
       const count = rng.range(1, 4);
       for (let s = 0; s < count; s++) {
@@ -522,7 +520,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
           life: rng.float(0.5, 1.5),
         });
       }
-    } else if (roll < 0.72 && !events.eclipse) {
+    } else if (roll < 0.50 && !events.eclipse) {
       // Eclipse
       events.eclipse = {
         timer: rng.float(8, 15),
@@ -530,17 +528,17 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         x: CANVAS_W * 0.5 + rng.float(-30, 30),
         y: rng.float(5, 20),
       };
-    } else if (roll < 0.80 && events.onStartFire) {
+    } else if (roll < 0.58 && events.onStartFire) {
       // Wildfire — spontaneous combustion in dry season
       events.onStartFire(rng.float(15, CANVAS_W - 15), waterY - rng.range(3, 8), rng);
-    } else if (roll < 0.88 && !events.flood) {
+    } else if (roll < 0.66 && !events.flood) {
       // Flash flood — water rises temporarily
       events.flood = {
         timer: rng.float(8, 15),
         intensity: rng.float(5, 15), // pixels of water rise
         progress: 0,
       };
-    } else if (roll < 0.92 && !events.hurricane) {
+    } else if (roll < 0.74 && !events.hurricane) {
       // Hurricane — extreme wind, rain, everything moves
       events.hurricane = {
         timer: rng.float(8, 20),
@@ -549,7 +547,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
       env.weather = 'storm';
       env.rainIntensity = 1.0;
       env.weatherTimer = 20;
-    } else if (roll < 0.96 && !events.tornado) {
+    } else if (roll < 0.80 && !events.tornado) {
       // Tornado — rare, devastating funnel crossing the screen
       events.tornado = {
         x: rng.chance(0.5) ? -10 : CANVAS_W + 10,
@@ -559,7 +557,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         timer: rng.float(10, 20),
         debris: [],
       };
-    } else if (roll < 0.97 && !events.fog) {
+    } else if (roll < 0.88 && !events.fog) {
       // Fog — thick swamp fog rolls in
       const duration = rng.float(10, 25);
       events.fog = {
@@ -568,13 +566,13 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
         maxOpacity: rng.float(0.3, 0.6),
         opacity: 0,
       };
-    } else if (roll < 0.98 && isNight && !events.bloodMoon) {
+    } else if (roll < 0.94 && isNight && !events.bloodMoon) {
       // Blood Moon — eerie red tint across the swamp
       events.bloodMoon = {
         timer: rng.float(10, 20),
         intensity: rng.float(0.15, 0.35),
       };
-    } else if (roll < 0.995 && !events.meteorImpact) {
+    } else if (roll < 0.97 && !events.meteorImpact) {
       // Meteor Impact — extremely rare, a fireball from the sky
       const targetX = rng.float(30, CANVAS_W - 30);
       events.meteorImpact = {
@@ -591,6 +589,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
       };
     }
   }
+  // end triggerRandomEvent
 }
 
 function spawnLightning(events, rng, waterY, world) {
