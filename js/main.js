@@ -574,6 +574,7 @@ const particles = createParticleState();
 const skulls = [];
 
 function addSkull(x, y) {
+  if (skulls.length > 30) skulls.shift(); // remove oldest
   skulls.push({ x: Math.floor(x), y: Math.floor(y), age: 0 });
 }
 

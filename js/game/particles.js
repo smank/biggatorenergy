@@ -14,6 +14,7 @@ export function createParticleState() {
 // --- Death Particles ---
 
 export function spawnDeathParticles(state, x, y, color = '#882222') {
+  if (state.deathParticles.length > 50) return; // cap
   const count = 3 + Math.floor(Math.random() * 4);
   for (let i = 0; i < count; i++) {
     state.deathParticles.push({
@@ -207,6 +208,7 @@ export function renderAmbientParticles(ctx, state, simTime) {
 // --- Ripples ---
 
 export function addRipple(state, x, y, maxRadius, opacity) {
+  if (state.ripples.length > 20) return; // cap
   state.ripples.push({ x, y, radius: 0, maxRadius, opacity });
 }
 

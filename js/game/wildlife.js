@@ -268,6 +268,11 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
     }
 
     const chain = FOOD_CHAIN[w.type];
+
+    // Skip expensive food chain logic for off-screen creatures
+    const onScreen = w.x > -5 && w.x < CANVAS_W + 5 && w.y > -5 && w.y < CANVAS_H + 5;
+    if (!onScreen) continue;
+
     const huntRange = 35;
     const killRange = 5;
     const fleeRange = 30;
@@ -721,7 +726,8 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
       }
     }
 
-    if (w.life <= 0 || w.x < -20 || w.x > CANVAS_W + 20 || w.y < -20 || w.y > CANVAS_H + 10) {
+    // Kill off-screen entities quickly — tighter bounds
+    if (w.life <= 0 || w.x < -12 || w.x > CANVAS_W + 12 || w.y < -15 || w.y > CANVAS_H + 5) {
       wildlife.splice(i, 1);
     }
   }
@@ -733,6 +739,8 @@ export function renderWildlife(ctx, state, simTime) {
     if (!w.alive) continue;
     const px = Math.floor(w.x);
     const py = Math.floor(w.y);
+    // Skip rendering off-screen creatures
+    if (px < -10 || px > CANVAS_W + 10 || py < -10 || py > CANVAS_H + 5) continue;
     const flipX = w.vx < 0;
 
     switch (w.type) {
