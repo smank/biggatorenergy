@@ -610,7 +610,6 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   }
 
   // Rainbow moved to renderRainbow — called before terrain in the pipeline
-  }
 
   // --- FLOATING LOGS / DEBRIS ---
   for (let i = 0; i < 4; i++) {
