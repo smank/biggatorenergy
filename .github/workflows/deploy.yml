@@ -4,14 +4,26 @@ on:
   push:
     branches: [main]
 
+# Cancel any in-flight deploy when a new push lands — avoids racing git pulls on the VPS
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Deploy
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/key
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/key
           chmod 600 ~/.ssh/key
-          ssh-keyscan -t ed25519 ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/key smank@${{ secrets.DEPLOY_HOST }} 'cd /srv/biggatorenergy && git pull && docker build -t biggatorenergy . && docker stop biggatorenergy; docker rm biggatorenergy; docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 biggatorenergy && docker image prune -f'
+          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=yes smank@"$HOST" \
+            'set -e; cd /srv/biggatorenergy && git pull --ff-only && docker build -t biggatorenergy . && (docker stop biggatorenergy || true) && (docker rm biggatorenergy || true) && docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 biggatorenergy && docker image prune -f'
