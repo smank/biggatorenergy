@@ -242,8 +242,9 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
         if (ufo.y > waterY - 5) {
           ufo.phase = 'crashed';
           ufo.timer = 15; // wreckage stays visible while aliens crawl out
-          ufo.crashX = ufo.x;
+          ufo.crashX = Math.max(15, Math.min(CANVAS_W - 15, ufo.x));
           ufo.crashY = waterY - 3;
+          ufo.x = ufo.crashX; // snap wreckage on screen
           events.lightningFlash = 0.8; // impact flash
           if (events.onExplosion) events.onExplosion();
           // Aliens will crawl out during the 'crashed' phase
