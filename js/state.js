@@ -1,7 +1,7 @@
 // State persistence — localStorage save/load, elapsed time fast-forward
 
 const SAVE_INTERVAL = 30; // seconds
-const MAX_FAST_FORWARD = 3600; // cap at 1 hour of sim time
+const MAX_FAST_FORWARD = 86400; // cap at 24 hours
 
 export function createPersistence(seed) {
   const key = `idlegator_${seed}`;

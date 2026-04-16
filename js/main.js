@@ -464,13 +464,16 @@ if (savedState && savedState.gators && savedState.gators.length > 0) {
   if (savedState.vegEpoch) vegState.epoch = savedState.vegEpoch;
   if (savedState.vegGrowth) vegState.growth = savedState.vegGrowth;
 
-  // Fast-forward elapsed time while away
+  // Fast-forward elapsed real time while away
   const elapsed = persistence.getElapsedTime(savedState);
   if (elapsed > 5) {
-    // Run simulation ticks without rendering to catch up
-    const tickDt = 0.5; // coarse ticks for speed
-    const maxTicks = Math.min(elapsed / tickDt, 7200); // cap at 1 hour
-    for (let t = 0; t < maxTicks; t++) {
+    // Adaptive tick size — bigger steps for longer absences, capped at ~4000 iterations
+    // <10 min: 0.5s ticks. <1 hr: 2s ticks. <6 hr: 10s ticks. >6 hr: 30s ticks.
+    const tickDt = elapsed < 600 ? 0.5 : elapsed < 3600 ? 2 : elapsed < 21600 ? 10 : 30;
+    const numTicks = Math.floor(elapsed / tickDt);
+    const cappedTicks = Math.min(numTicks, 4000);
+
+    for (let t = 0; t < cappedTicks; t++) {
       environmentSystem(env, tickDt, rng);
       aiSystem(world, tickDt, rng, waterY);
       breedingSystem(world, tickDt, rng, waterY, spawnGatorFromParents);
@@ -478,12 +481,13 @@ if (savedState && savedState.gators && savedState.gators.length > 0) {
       physicsSystem(world, tickDt, terrain, waterY, rng);
       world.flush();
       simTime += tickDt;
-      // Respawn if all gators died during fast-forward
       if (world.count('gator') === 0) {
         for (let i = 0; i < rng.range(3, 5); i++) spawnGator(rng, 'adult');
       }
     }
-    updateVegGrowth(elapsed); // big jump in vegetation
+    // Vegetation catches up with the full elapsed time
+    updateVegGrowth(elapsed);
+    vegState.age += elapsed;
   }
 } else {
   // Fresh start
