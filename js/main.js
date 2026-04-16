@@ -579,30 +579,57 @@ function addSkull(x, y) {
 }
 
 function renderSkulls(ctx, skulls, simTime) {
-  for (const skull of skulls) {
-    let color, mossed = false;
-    if (skull.age < 30) {
-      color = '#ddddcc'; // fresh bone white
-    } else if (skull.age < 120) {
-      color = '#cccc99'; // yellowing
-    } else {
-      color = '#88aa77'; // mossy green
-      mossed = true;
+  for (let i = skulls.length - 1; i >= 0; i--) {
+    const skull = skulls[i];
+
+    // Return to the earth — skulls sink and fade over time
+    // Phase 1 (0-30s): fresh bone white
+    // Phase 2 (30-120s): yellowing
+    // Phase 3 (120-240s): mossy, starting to sink
+    // Phase 4 (240-360s): earth-colored, mostly submerged, fading
+    // Phase 5 (360+): gone
+    if (skull.age > 360) {
+      skulls.splice(i, 1);
+      continue;
     }
+
+    let color, mossed = false;
+    let sinkOffset = 0;
+    let alpha = 1;
+
+    if (skull.age < 30) {
+      color = '#ddddcc';
+    } else if (skull.age < 120) {
+      color = '#cccc99';
+    } else if (skull.age < 240) {
+      color = '#88aa77';
+      mossed = true;
+      sinkOffset = Math.floor((skull.age - 120) / 120); // sink 0-1 pixel
+    } else {
+      color = '#6a6a55';
+      mossed = true;
+      sinkOffset = 1;
+      alpha = 1 - (skull.age - 240) / 120; // fade out over final phase
+    }
+
     const sx = skull.x;
-    const sy = skull.y;
-    // Tiny 3x2 skull sprite
-    // Top row: rounded cranium (3 pixels)
+    const sy = skull.y + sinkOffset;
+
+    ctx.globalAlpha = Math.max(0, alpha);
     ctx.fillStyle = color;
-    ctx.fillRect(sx, sy, 3, 1);
-    // Bottom row: jaw (pixel 0 and pixel 2, gap in middle)
+    // Top row: cranium (skip if fully sunk)
+    if (sinkOffset < 2) {
+      ctx.fillRect(sx, sy, 3, 1);
+    }
+    // Bottom row: jaw
     ctx.fillRect(sx, sy + 1, 1, 1);
     ctx.fillRect(sx + 2, sy + 1, 1, 1);
-    // Moss on top for old skulls
-    if (mossed) {
+    // Moss on top
+    if (mossed && sinkOffset < 1) {
       ctx.fillStyle = '#5a7a44';
       ctx.fillRect(sx + 1, sy - 1, 1, 1);
     }
+    ctx.globalAlpha = 1;
   }
 }
 
