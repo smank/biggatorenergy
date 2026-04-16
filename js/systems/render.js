@@ -843,12 +843,34 @@ function drawScaledSprite(ctx, sprite, x, y, flipX, tints, scale) {
   }
 }
 
-export function renderPrey(ctx, world, simTime) {
+export function renderPrey(ctx, world, simTime, dt) {
   for (const [id, tr, prey] of world.query('transform', 'prey')) {
     if (!prey.alive) continue;
     const sprite = prey.sprite;
     if (sprite) {
       drawSprite(ctx, sprite, Math.floor(tr.x), Math.floor(tr.y), tr.vx < 0);
+    }
+    // Frog tongue flick — pink line from frog mouth toward target
+    if (prey.type === 'frog' && prey.tongueFlick > 0) {
+      prey.tongueFlick -= dt || 0.016;
+      const tx = prey.tongueTarget?.x || tr.x;
+      const ty = prey.tongueTarget?.y || tr.y;
+      const fx = Math.floor(tr.x + 2);
+      const fy = Math.floor(tr.y + 1);
+      const dx = tx - fx;
+      const dy = ty - fy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const tongueLen = Math.min(dist, 12);
+      const steps = Math.floor(tongueLen);
+      ctx.fillStyle = '#dd4466';
+      for (let s = 0; s < steps; s++) {
+        ctx.fillRect(Math.floor(fx + (dx / dist) * s), Math.floor(fy + (dy / dist) * s), 1, 1);
+      }
+      // Fly stuck on tongue tip when catching
+      if (prey.tongueFlick > 0.15) {
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(Math.floor(fx + (dx / dist) * tongueLen), Math.floor(fy + (dy / dist) * tongueLen), 1, 1);
+      }
     }
   }
 }

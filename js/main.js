@@ -505,34 +505,42 @@ function preySystem(world, dt, simTime, rng) {
         break;
       case 'frog':
         prey.buzzTimer -= dt;
-        // Frogs hunt flies!
+        // Frogs actively hunt flies — primary behavior
         let chasedFly = false;
         for (const [fid, ftr, fprey] of world.query('transform', 'prey')) {
           if (fprey.type !== 'fly' || !fprey.alive) continue;
-          const dist = Math.sqrt((ftr.x - tr.x) ** 2 + (ftr.y - tr.y) ** 2);
-          if (dist < 35) {
-            // Leap toward fly — fast tongue strike
-            const dx = ftr.x - tr.x;
-            const dy = ftr.y - tr.y;
-            tr.vx = (dx / dist) * 22;
-            tr.vy = (dy / dist) * 22;
+          const dx = ftr.x - tr.x;
+          const dy = ftr.y - tr.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 50) {
+            // Leap toward fly — powerful jump
+            const speed = dist < 15 ? 30 : 22; // faster when close
+            tr.vx = (dx / dist) * speed;
+            tr.vy = (dy / dist) * speed;
             chasedFly = true;
-            // Eat if close — tongue range
-            if (dist < 6) {
+            // Tongue flick toward fly while chasing
+            prey.tongueTarget = { x: ftr.x, y: ftr.y };
+            prey.tongueFlick = 0.15; // brief flash
+
+            // Eat — tongue snaps out and grabs
+            if (dist < 7) {
               fprey.alive = false;
               world.kill(fid);
-              prey.value += 0.02; // frog gets fatter
+              prey.value += 0.03;
+              prey.tongueFlick = 0.3; // longer flick on successful catch
             }
             break;
           }
         }
         if (!chasedFly) {
+          // Idle hopping when no flies nearby
           if (prey.buzzTimer <= 0) {
-            tr.vx = rng.float(-3, 3); tr.vy = -rng.float(3, 8);
-            prey.buzzTimer = rng.float(1.5, 4);
+            tr.vx = rng.float(-4, 4);
+            tr.vy = -rng.float(5, 12); // higher jumps to spot flies
+            prey.buzzTimer = rng.float(0.8, 2.5); // more frequent hops
           }
         }
-        tr.vy += 15 * dt;
+        tr.vy += 18 * dt; // gravity
         if (tr.y > waterY - 2) { tr.y = waterY - 2; tr.vy = 0; }
         break;
     }
@@ -932,7 +940,7 @@ function gameLoop(timestamp) {
   renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
   renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState);
   renderSkulls(ctx, skulls, simTime);
-  renderPrey(ctx, world, simTime);
+  renderPrey(ctx, world, simTime, dt);
   renderGators(ctx, world, simTime);
   renderPredators(ctx, world);
   renderRipples(ctx, particles, dt);

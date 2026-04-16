@@ -271,10 +271,12 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
     }
   }
 
-  // Eclipse
+  // Eclipse — suppress normal sun rendering while active
+  env._eclipseActive = !!events.eclipse;
   if (events.eclipse) {
     events.eclipse.timer -= dt;
     events.eclipse.progress += dt * 0.1;
+    events.eclipse._tod = env.timeOfDay; // track sun position for rendering
     if (events.eclipse.timer <= 0) {
       events.eclipse = null;
     }
@@ -847,16 +849,21 @@ export function renderEvents(ctx, events, simTime, waterY) {
     }
   }
 
-  // Eclipse
+  // Eclipse — renders sun at its real position with moon crossing over
   if (events.eclipse) {
     const e = events.eclipse;
     const progress = Math.sin(e.progress * Math.PI); // 0 -> 1 -> 0
     // Darken sky
     ctx.fillStyle = `rgba(0, 0, 20, ${progress * 0.5})`;
     ctx.fillRect(0, 0, CANVAS_W, waterY);
-    // Moon passing over sun
-    const sunX = Math.floor(e.x);
-    const sunY = Math.floor(e.y);
+    // Calculate real sun position (same math as renderCelestial)
+    const tod = e._tod || 0.5; // fallback to noon
+    const skyTop = 4;
+    const skyBottom = Math.floor(waterY * 0.35);
+    const dayP = Math.max(0, Math.min(1, (tod - 0.22) / 0.56));
+    const sunX = Math.floor(CANVAS_W * 0.25 + dayP * CANVAS_W * 0.5);
+    const sunArc = Math.sin(dayP * Math.PI);
+    const sunY = Math.floor(skyBottom - sunArc * (skyBottom - skyTop));
     // Sun
     ctx.fillStyle = '#ffdd44';
     ctx.fillRect(sunX - 2, sunY - 2, 5, 5);

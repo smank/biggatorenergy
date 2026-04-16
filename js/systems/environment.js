@@ -164,8 +164,8 @@ export function renderCelestial(ctx, env, waterY, simTime) {
   const skyTop = 4;
   const skyBottom = Math.floor(waterY * 0.35); // well above the tree line
 
-  // --- SUN --- (visible only during day, never overlaps moon)
-  if (tod > 0.22 && tod < 0.78) {
+  // --- SUN --- (visible only during day, never overlaps moon, hidden during eclipse)
+  if (tod > 0.22 && tod < 0.78 && !env._eclipseActive) {
     const dayProgress = (tod - 0.22) / 0.56;
     // Gentle horizontal drift across ~50% of the screen, centered
     const sunX = Math.floor(CANVAS_W * 0.25 + dayProgress * CANVAS_W * 0.5);
