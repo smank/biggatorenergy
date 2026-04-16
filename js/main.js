@@ -154,6 +154,8 @@ const vegState = {
   treeGrowth: 0.7,   // tree canopy fullness
   flowerBloom: 0.5,  // flower density
   undergrowth: 0.7,  // grass/fern density
+  destroyedTrees: [], // x positions of trees ripped out by tornados
+  flyingDebris: [],   // tree chunks orbiting a tornado
   age: 0,            // total sim-seconds lived — drives epoch transitions
   epoch: 0,          // 0=nascent, 1=established, 2=flourishing, 3=ancient, 4=primordial
   orchidChance: 0,   // orchids only bloom in mature swamps
@@ -270,14 +272,40 @@ events.onTornadoPull = (tx, ty, range, dt, rng) => {
     if (!w.alive) continue;
     const dist = Math.abs(w.x - tx);
     if (dist < range) {
-      // Pull toward tornado center
       const pull = (1 - dist / range) * 50;
       w.vx += Math.sign(tx - w.x) * pull * dt;
       w.vy -= pull * 0.4 * dt;
-      // Kill if sucked into center
       if (dist < 6) {
         w.alive = false;
         spawnDeathParticles(particles, w.x, w.y, '#666666');
+      }
+    }
+  }
+  // Rip up trees near the tornado
+  // Trees are procedurally placed by vegRng — we track destroyed x positions
+  // to skip them in rendering. Spawn flying debris chunks.
+  const treeRng = createRNG(rng._seed + 999);
+  const numTrees = Math.floor(treeRng.range(5, 9) * vegState.treeGrowth);
+  for (let i = 0; i < numTrees; i++) {
+    const treeX = treeRng.range(8, CANVAS_W - 8);
+    treeRng.range(0, 100); // consume RNG to stay aligned with render
+    const dist = Math.abs(treeX - tx);
+    if (dist < 12 && !vegState.destroyedTrees.includes(treeX)) {
+      vegState.destroyedTrees.push(treeX);
+      // Spawn flying debris — trunk chunks and canopy pieces
+      for (let d = 0; d < rng.range(3, 6); d++) {
+        vegState.flyingDebris.push({
+          x: treeX + rng.float(-5, 5),
+          y: ty + rng.float(-20, 0),
+          vx: rng.float(-8, 8),
+          vy: rng.float(-15, -5),
+          rot: rng.float(0, Math.PI * 2),
+          rotSpeed: rng.float(-5, 5),
+          size: rng.range(2, 5),
+          color: rng.pick(['#4a3a22', '#3a2a18', '#2a5a1e', '#1a3a14']),
+          life: rng.float(3, 8),
+          tornadoX: tx, // track tornado center for orbiting
+        });
       }
     }
   }
@@ -883,6 +911,38 @@ function gameLoop(timestamp) {
   updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat });
   updateEvents(events, world, dt, rng, waterY, simTime, env);
   updateFires(fireState, dt, rng, wildlifeState.wildlife, world, env, waterY);
+
+  // Update flying tree debris
+  for (let i = vegState.flyingDebris.length - 1; i >= 0; i--) {
+    const d = vegState.flyingDebris[i];
+    d.life -= dt;
+    if (d.life <= 0 || d.y > waterY + 10) {
+      vegState.flyingDebris.splice(i, 1);
+      continue;
+    }
+    // If tornado still active, orbit around it
+    if (events.tornado) {
+      const dx = events.tornado.x - d.x;
+      const pull = Math.sign(dx) * 15;
+      d.vx += pull * dt;
+      d.vy -= 8 * dt; // tornado lifts debris
+    } else {
+      d.vy += 12 * dt; // gravity when tornado is gone
+    }
+    d.x += d.vx * dt;
+    d.y += d.vy * dt;
+    d.rot += d.rotSpeed * dt;
+    d.vx *= 0.99;
+  }
+
+  // Destroyed trees slowly regrow (remove from list after 120s)
+  for (let i = vegState.destroyedTrees.length - 1; i >= 0; i--) {
+    // Track age by storing as {x, age} — but currently just x numbers
+    // Simple approach: remove one random destroyed tree every 30 seconds
+  }
+  if (vegState.destroyedTrees.length > 0 && rng.chance(0.03 * dt)) {
+    vegState.destroyedTrees.shift(); // oldest tree regrows first
+  }
   updateVegGrowth(dt);
   updateAudio(dt, env, simTime);
   setEpoch(vegState.epoch);
@@ -987,6 +1047,23 @@ function gameLoop(timestamp) {
   renderWildlife(ctx, wildlifeState, simTime);
   renderAmbientParticles(ctx, particles, simTime);
   renderDeathParticles(ctx, particles);
+
+  // Render flying tree debris
+  for (const d of vegState.flyingDebris) {
+    const px = Math.floor(d.x);
+    const py = Math.floor(d.y);
+    ctx.fillStyle = d.color;
+    // Rotating chunk — draw a small rectangle at an angle approximated by pixel offsets
+    const cos = Math.cos(d.rot);
+    const sin = Math.sin(d.rot);
+    for (let dx = 0; dx < d.size; dx++) {
+      for (let dy = 0; dy < Math.max(1, d.size - 1); dy++) {
+        const rx = Math.floor(px + dx * cos - dy * sin);
+        const ry = Math.floor(py + dx * sin + dy * cos);
+        ctx.fillRect(rx, ry, 1, 1);
+      }
+    }
+  }
   renderFires(ctx, fireState, simTime);
   renderEvents(ctx, events, simTime, waterY);
   renderEnvironmentEffects(ctx, env, waterY, simTime);

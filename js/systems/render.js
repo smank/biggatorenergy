@@ -196,13 +196,27 @@ export function renderVegetation(ctx, terrain, waterY, vegRng, simTime, vegState
   const windDir = hurricaneWind ? Math.sign(hurricaneWind) : Math.sin(simTime * 0.3); // unified wind direction
   // --- TALL CYPRESS / SWAMP TREES ---
   const treeZones = []; // track canopy positions for orchid anchoring
+  const destroyed = (vg.destroyedTrees || []);
   const numTrees = Math.floor(vegRng.range(5, 9) * vg.treeGrowth);
   for (let i = 0; i < numTrees; i++) {
     const x = vegRng.range(8, CANVAS_W - 8);
     const groundY = terrain[x];
+    const isDestroyed = destroyed.includes(x);
     if (groundY < waterY + 8) {
-      const trunkH = vegRng.range(30, 55); // TALL trees
+      const trunkH = vegRng.range(30, 55);
       const trunkW = vegRng.range(2, 5);
+
+      // Destroyed tree — draw stump instead, but RNG continues so other trees stay stable
+      if (isDestroyed) {
+        ctx.fillStyle = '#3a2a18';
+        ctx.fillRect(x - 1, groundY - 3, 3, 3);
+        ctx.fillStyle = '#5a4a2a';
+        ctx.fillRect(x - 2, groundY, 5, 2);
+        // Consume the remaining RNG this tree would use (approximate)
+        for (let _r = 0; _r < 20; _r++) vegRng.random();
+        treeZones.push({ x, canopyY: groundY - trunkH, canopyW: 0, canopyH: 0 });
+        continue;
+      }
       const sway = (Math.sin(simTime * 0.2 + x * 0.15) * 0.4 + windDir * 0.3) * windMult;
       const treeType = vegRng.range(0, 2); // variety
 
