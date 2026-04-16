@@ -241,7 +241,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
         // Hit ground
         if (ufo.y > waterY - 5) {
           ufo.phase = 'crashed';
-          ufo.timer = 8; // wreckage stays visible for a while
+          ufo.timer = 15; // wreckage stays visible while aliens crawl out
           ufo.crashX = ufo.x;
           ufo.crashY = waterY - 3;
           events.lightningFlash = 0.8; // impact flash
