@@ -437,10 +437,56 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
   return id;
 }
 
-// --- Initial Population ---
-const initialCount = rng.range(4, 6);
-for (let i = 0; i < initialCount; i++) {
-  spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile', 'juvenile', 'adult']));
+let simTime = 0;
+
+// --- Load Saved State or Fresh Start ---
+const savedState = persistence.load();
+if (savedState && savedState.gators && savedState.gators.length > 0) {
+  // Restore gators from save
+  for (const saved of savedState.gators) {
+    const id = world.create();
+    world.add(id, 'transform', { ...saved.tr });
+    world.add(id, 'gator', { ...saved.gator, traits: { ...saved.gator.traits } });
+  }
+  // Restore environment
+  if (savedState.env) {
+    Object.assign(env, savedState.env);
+  }
+  // Restore sim time and generation
+  simTime = savedState.simTime || 0;
+  maxGeneration = savedState.maxGeneration || 0;
+  // Restore vegState age/epoch
+  if (savedState.vegAge) vegState.age = savedState.vegAge;
+  if (savedState.vegEpoch) vegState.epoch = savedState.vegEpoch;
+  if (savedState.vegGrowth) vegState.growth = savedState.vegGrowth;
+
+  // Fast-forward elapsed time while away
+  const elapsed = persistence.getElapsedTime(savedState);
+  if (elapsed > 5) {
+    // Run simulation ticks without rendering to catch up
+    const tickDt = 0.5; // coarse ticks for speed
+    const maxTicks = Math.min(elapsed / tickDt, 7200); // cap at 1 hour
+    for (let t = 0; t < maxTicks; t++) {
+      environmentSystem(env, tickDt, rng);
+      aiSystem(world, tickDt, rng, waterY);
+      breedingSystem(world, tickDt, rng, waterY, spawnGatorFromParents);
+      lifecycleSystem(world, tickDt, rng);
+      physicsSystem(world, tickDt, terrain, waterY, rng);
+      world.flush();
+      simTime += tickDt;
+      // Respawn if all gators died during fast-forward
+      if (world.count('gator') === 0) {
+        for (let i = 0; i < rng.range(3, 5); i++) spawnGator(rng, 'adult');
+      }
+    }
+    updateVegGrowth(elapsed); // big jump in vegetation
+  }
+} else {
+  // Fresh start
+  const initialCount = rng.range(4, 6);
+  for (let i = 0; i < initialCount; i++) {
+    spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile', 'juvenile', 'adult']));
+  }
 }
 
 // --- Rival Gator System ---
@@ -890,12 +936,11 @@ function renderTheDeep(ctx, deepState, waterY, simTime) {
 
 // --- Save on unload ---
 window.addEventListener('beforeunload', () => {
-  persistence.save(world, env, simTime, maxGeneration);
+  persistence.save(world, env, simTime, maxGeneration, vegState);
 });
 
 // --- Game Loop ---
 let lastTime = 0;
-let simTime = 0;
 let gameOver = false;
 let gameOverTimer = 0;
 
@@ -1084,7 +1129,7 @@ function gameLoop(timestamp) {
 
   // Auto-save
   if (persistence.shouldAutoSave(dt)) {
-    persistence.save(world, env, simTime, maxGeneration);
+    persistence.save(world, env, simTime, maxGeneration, vegState);
   }
 
   // --- Render ---

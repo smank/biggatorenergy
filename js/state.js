@@ -8,7 +8,7 @@ export function createPersistence(seed) {
   let saveTimer = SAVE_INTERVAL;
 
   return {
-    save(world, env, simTime, maxGeneration) {
+    save(world, env, simTime, maxGeneration, vegState) {
       const gators = [];
       for (const [id, tr, gator] of world.query('transform', 'gator')) {
         gators.push({ tr: { ...tr }, gator: { ...gator, traits: { ...gator.traits } } });
@@ -27,6 +27,9 @@ export function createPersistence(seed) {
           weatherTimer: env.weatherTimer,
           rainIntensity: env.rainIntensity,
         },
+        vegAge: vegState ? vegState.age : 0,
+        vegEpoch: vegState ? vegState.epoch : 0,
+        vegGrowth: vegState ? vegState.growth : 0.8,
         savedAt: Date.now(),
         version: 1,
       };
