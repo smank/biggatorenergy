@@ -459,6 +459,11 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
 
 let simTime = 0;
 
+// --- Fire system ---
+// Declared before the load block below because updateVegGrowth() reads
+// fireState.fires.length and the fast-forward path calls updateVegGrowth at init.
+const fireState = createFireState();
+
 // --- Load Saved State or Fresh Start ---
 const savedState = persistence.load();
 if (savedState && Array.isArray(savedState.gators) && savedState.gators.length > 0) {
@@ -688,9 +693,6 @@ function preySystem(world, dt, simTime, rng) {
 
 
 // --- God Powers ---
-
-// --- FIRE SYSTEM ---
-const fireState = createFireState();
 
 // --- PARTICLE SYSTEMS ---
 const particles = createParticleState();
