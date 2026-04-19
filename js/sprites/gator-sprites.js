@@ -1,6 +1,7 @@
 // Gator sprite data — caricature alligator
-// Chunky body, oversized head/snout, big expressive eye, stubby legs
-// Dark but not drab — rich greens with character
+// Side view, faces RIGHT (renderer flips horizontally when direction === -1).
+// Tail tapers to the left, body in the middle, head + snout on the right.
+// Eye sits raised on top of the skull. Nostril at the snout tip.
 const _ = null;
 const D = '#2a4a1e'; // dark outline
 const B = '#3a6a28'; // body — rich dark green
@@ -22,164 +23,164 @@ const EGG = [
 ];
 
 // --- STAGE 1: HATCHLING (10x5) ---
-// Cute baby — oversized head, big eye, tiny body
+// Cute baby — short body, big head, raised eye, tiny snout
 const HATCHLING_IDLE = [
-  [_, _, _, _, S, S, _, _, _, _],
-  [_, _, D, B, B, E, E, P, N, _],
-  [_, D, B, B, B, B, B, D, D, D],
-  [_, _, V, V, V, V, _, _, _, _],
-  [_, _, L, _, _, L, _, _, _, _],
+  [_, _, _, S, S, S, _, _, _, _],
+  [_, _, D, B, B, B, D, E, P, _],
+  [_, D, B, B, B, B, B, B, D, N],
+  [_, _, D, V, V, V, V, V, D, _],
+  [_, _, _, L, _, _, L, _, _, _],
 ];
 
 const HATCHLING_BLINK = [
-  [_, _, _, _, S, S, _, _, _, _],
-  [_, _, D, B, B, D, D, D, N, _],
-  [_, D, B, B, B, B, B, D, D, D],
-  [_, _, V, V, V, V, _, _, _, _],
-  [_, _, L, _, _, L, _, _, _, _],
+  [_, _, _, S, S, S, _, _, _, _],
+  [_, _, D, B, B, B, D, D, D, _],
+  [_, D, B, B, B, B, B, B, D, N],
+  [_, _, D, V, V, V, V, V, D, _],
+  [_, _, _, L, _, _, L, _, _, _],
 ];
 
 const HATCHLING_EAT = [
-  [_, _, _, _, S, S, _, _, _, _],
-  [_, _, D, B, B, E, E, P, T, _],
-  [_, D, B, B, B, B, M, M, M, D],
-  [_, _, V, V, V, V, _, T, _, _],
-  [_, _, L, _, _, L, _, _, _, _],
+  [_, _, _, S, S, S, _, _, _, _],
+  [_, _, D, B, B, B, D, E, P, _],
+  [_, D, B, B, B, B, D, T, T, N],
+  [_, _, D, V, V, V, D, M, T, _],
+  [_, _, _, L, _, _, L, _, _, _],
 ];
 
 // --- STAGE 2: JUVENILE (16x7) ---
-// Getting beefy — head still proportionally big
+// Lengthening out — clear head/body/tail proportions
 const JUVENILE_IDLE = [
-  [_, _, _, _, _, _, S, S, S, _, _, _, _, _, _, _],
-  [_, _, _, _, D, S, B, B, B, S, _, _, _, _, _, _],
-  [_, _, _, D, B, B, B, B, B, E, E, P, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, D, D, D, D, N, _],
-  [_, D, V, V, V, V, V, V, V, V, V, D, D, N, _, _],
-  [_, _, _, L, _, _, L, _, _, L, _, _, _, _, D, D],
-  [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _],
+  [_, _, _, _, _, D, S, D, S, D, S, D, E, E, _, _],
+  [_, _, _, D, D, B, B, B, B, B, B, B, E, P, D, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, D, D, _],
+  [_, _, _, D, _, L, L, _, _, L, L, _, _, L, _, _],
 ];
 
 const JUVENILE_BLINK = [
-  [_, _, _, _, _, _, S, S, S, _, _, _, _, _, _, _],
-  [_, _, _, _, D, S, B, B, B, S, _, _, _, _, _, _],
-  [_, _, _, D, B, B, B, B, B, D, D, D, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, D, D, D, D, N, _],
-  [_, D, V, V, V, V, V, V, V, V, V, D, D, N, _, _],
-  [_, _, _, L, _, _, L, _, _, L, _, _, _, _, D, D],
-  [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _],
+  [_, _, _, _, _, D, S, D, S, D, S, D, D, D, _, _],
+  [_, _, _, D, D, B, B, B, B, B, B, B, D, D, D, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, D, D, _],
+  [_, _, _, D, _, L, L, _, _, L, L, _, _, L, _, _],
 ];
 
 const JUVENILE_EAT = [
-  [_, _, _, _, _, _, S, S, S, _, _, _, _, _, _, _],
-  [_, _, _, _, D, S, B, B, B, S, _, _, _, _, _, _],
-  [_, _, _, D, B, B, B, B, B, E, E, P, D, T, T, _],
-  [D, D, D, B, B, B, B, B, B, B, D, M, M, M, M, D],
+  [_, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _],
+  [_, _, _, _, _, D, S, D, S, D, S, D, E, E, _, _],
+  [_, _, _, D, D, B, B, B, B, B, B, B, E, P, D, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, D, T, T, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, D, M, M, _],
   [_, D, V, V, V, V, V, V, V, V, V, D, D, T, T, _],
-  [_, _, _, L, _, _, L, _, _, L, _, _, _, _, D, D],
-  [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, D, _, L, L, _, _, L, L, _, _, D, D, _],
 ];
 
 // --- STAGE 3: ADULT (24x9) ---
-// Chunky powerhouse — big head, heavy body, pronounced snout, thick tail
-// Eye is 2px wide and sits proud on top of the skull
+// Heavy body, defined snout + jaw line, raised eye dome, tapering tail
 const ADULT_IDLE = [
-  [_, _, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, S, D, S, D, S, E, E, P, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _],
-  [_, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, _, _, _, _, _, _],
-  [D, D, D, D, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, D, D, N, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, V, _, _, _, _, D, D, D, D, D, D],
-  [_, _, _, L, _, _, _, L, _, _, _, L, _, _, _, _, _, D, D, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, _, E, E, _, _, _, _, _],
+  [_, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, D, E, P, D, _, _, _, _],
+  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, D, _, _],
+  [_, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, D, D, D, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
 const ADULT_BLINK = [
-  [_, _, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, S, D, S, D, S, D, D, D, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _],
-  [_, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, _, _, _, _, _, _],
-  [D, D, D, D, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, D, D, N, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, V, _, _, _, _, D, D, D, D, D, D],
-  [_, _, _, L, _, _, _, L, _, _, _, L, _, _, _, _, _, D, D, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, _, D, D, _, _, _, _, _],
+  [_, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, D, D, D, D, _, _, _, _],
+  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, D, _, _],
+  [_, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, D, D, D, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
-// Big chomp — jaws wide, teeth visible, mouth gap clear
+// Big chomp — upper and lower jaws separated by a 1px mouth gap
 const ADULT_EAT = [
-  [_, _, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, S, D, S, D, S, E, E, P, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _],
-  [_, _, _, _, D, D, B, B, B, B, B, B, B, D, T, T, T, _, _, _, _, _, _, _],
-  [D, D, D, D, B, B, B, B, B, B, B, B, B, B, _, _, _, _, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, _, _, _, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, D, T, T, T, _, _, _, _, _, _, _],
-  [_, _, _, L, _, _, _, L, _, _, _, L, _, D, D, D, D, N, _, D, D, D, D, D],
+  [_, _, _, _, _, _, _, _, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, _, E, E, _, _, _, _, _],
+  [_, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, D, E, P, D, _, _, _, _],
+  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, D, T, T, T, D, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, M, M, M, M, D, _],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, M, M, M, D, _, _],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, T, T, T, D, _, _],
+  [_, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, D, D, D, D, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
+// Swimming — legs tucked, body trails a darker waterline shadow
 const ADULT_SWIM = [
-  [_, _, _, _, _, _, _, _, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, S, D, S, D, S, E, E, P, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _],
-  [_, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, _, _, _, _, _, _],
-  [D, D, D, D, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _],
-  [_, D, D, D, V, V, V, V, V, V, V, V, V, V, D, D, N, _, _, _, _, _, _, _],
-  [_, _, _, D, D, D, D, D, D, D, D, D, D, D, _, _, _, _, D, D, D, D, D, D],
+  [_, _, _, _, _, _, _, _, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, _, E, E, _, _, _, _, _],
+  [_, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, D, E, P, D, _, _, _, _],
+  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _],
+  [_, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, N],
+  [_, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
-// --- STAGE 4: ELDER (28x10) --- big old bruiser, thick everywhere
+// --- STAGE 4: ELDER (28x10) — biggest, longest snout, full row of scutes
 const ELDER_IDLE = [
-  [_, _, _, _, _, _, _, _, _, _, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, S, D, S, D, S, D, E, E, P, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, D, B, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, D, _, _, _, _, _, _, _],
-  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, _, _, _, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, V, V, V, B, _, _, _, _, D, D, D, D, D, D, D],
-  [_, _, _, L, _, _, _, _, L, _, _, _, L, _, _, _, _, _, _, _, D, D, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, _, S, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, S, _, _, E, E, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, B, D, D, E, P, D, _, _, _, _, _],
+  [_, _, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _, _],
+  [_, _, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, N],
+  [D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, _],
+  [_, _, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, D, _, _],
+  [_, _, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, L, L, _, _, D, D, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
 const ELDER_BLINK = [
-  [_, _, _, _, _, _, _, _, _, _, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, S, D, S, D, S, D, D, D, D, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, D, B, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, D, _, _, _, _, _, _, _],
-  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, _, _, _, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, V, V, V, B, _, _, _, _, D, D, D, D, D, D, D],
-  [_, _, _, L, _, _, _, _, L, _, _, _, L, _, _, _, _, _, _, _, D, D, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, _, S, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, S, _, _, D, D, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, B, D, D, D, D, D, _, _, _, _, _],
+  [_, _, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _, _],
+  [_, _, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, N],
+  [D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, _],
+  [_, _, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, D, _, _],
+  [_, _, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, L, L, _, _, D, D, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
 const ELDER_EAT = [
-  [_, _, _, _, _, _, _, _, _, _, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, S, D, S, D, S, D, E, E, P, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, D, B, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, D, B, B, B, B, B, B, B, B, D, T, T, T, _, _, _, _, _, _, _, _],
-  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, _, _, _, _, _, _, _, _, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, D, D, V, V, V, V, V, V, V, V, V, V, V, V, V, D, T, T, T, _, _, _, _, _, _, _, _],
-  [_, _, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, D, D, D, N, _, D, D, D, D, D, D],
-  [_, _, _, L, _, _, _, _, L, _, _, _, L, _, _, _, _, _, _, _, D, D, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, _, S, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, S, _, _, E, E, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, B, D, D, E, P, D, _, _, _, _, _],
+  [_, _, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, T, T, T, D, _],
+  [_, _, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, M, M, M, D, _],
+  [D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, M, M, D, _, _],
+  [_, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, M, M, D, _, _],
+  [_, _, D, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, D, T, T, D, _, _],
+  [_, _, _, D, D, _, L, L, _, _, L, L, _, _, L, L, _, _, L, L, _, D, D, D, D, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
 
 const ELDER_SWIM = [
-  [_, _, _, _, _, _, _, _, _, _, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, S, D, S, D, S, D, E, E, P, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, D, B, B, B, B, B, B, B, D, D, D, D, N, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, D, D, B, B, B, B, B, B, B, B, B, D, D, D, D, _, _, _, _, _, _, _],
-  [_, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _],
-  [D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, D, N, _, _, _, _, _, _, _, _],
-  [_, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, V, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, D, D, D, D, D, D, D],
+  [_, _, _, _, _, _, _, _, _, S, S, S, S, S, S, S, S, _, _, _, _, _, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, _, D, S, D, S, D, S, D, S, D, S, _, _, E, E, _, _, _, _, _, _],
+  [_, _, _, _, _, _, _, D, B, B, B, B, B, B, B, B, B, B, D, D, E, P, D, _, _, _, _, _],
+  [_, _, _, _, D, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, _, _, _],
+  [_, _, D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, D, N],
+  [D, D, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, D, N],
+  [_, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, _, _],
+  [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
   [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
 ];
