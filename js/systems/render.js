@@ -899,6 +899,26 @@ export function renderGators(ctx, world, simTime) {
       if (gator.glowTimer <= 0) gator.glowing = false;
     }
 
+    // Bloodline marker — small 3px tick above founders, 2px above descendants
+    if (gator.lineageId) {
+      const spriteW = (gator.spriteW || 10);
+      const markX = Math.floor(drawX + (spriteW * scale) / 2) - 1;
+      const markY = Math.floor(drawY - 3);
+      if (gator.founder) {
+        // Three-dot crown for founders
+        ctx.fillStyle = '#ddbb44';
+        ctx.fillRect(markX - 1, markY, 1, 1);
+        ctx.fillRect(markX + 1, markY, 1, 1);
+        ctx.fillRect(markX + 3, markY, 1, 1);
+        ctx.fillStyle = '#aa8822';
+        ctx.fillRect(markX, markY + 1, 3, 1);
+      } else {
+        // Simple pip for descendants
+        ctx.fillStyle = '#8aca6a';
+        ctx.fillRect(markX + 1, markY + 1, 1, 1);
+      }
+    }
+
     // Golden gator shimmer overlay
     if (gator.golden) {
       const glowScale = scale > 1.05 ? scale : 1;

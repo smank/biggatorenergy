@@ -17,6 +17,7 @@ import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, 
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
+import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints } from './game/dynasty.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -75,18 +76,30 @@ document.addEventListener('keydown', (e) => {
 
 // --- Orientation Detection ---
 // Polls every frame — in-app browsers (Instagram, Facebook, TikTok, Twitter, Snapchat)
-// often don't fire resize/orientationchange events on rotation
+// often don't fire resize/orientationchange events on rotation.
+// Only triggers on actual touch/mobile devices — desktop windows that happen to be
+// narrow (tall sidebar layouts, vertically-split dev windows) should never see this.
 const rotatePrompt = document.getElementById('rotate-prompt');
 let lastOrientationCheck = '';
+const isTouchDevice = (() => {
+  try {
+    // No fine pointer + no hover = a touch device. Modern way to detect this.
+    if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
+    // Fallback: maxTouchPoints > 0 catches iPads in desktop-mode requests.
+    if ((navigator.maxTouchPoints || 0) > 1) return true;
+  } catch (e) {}
+  return false;
+})();
 
 function checkOrientation() {
+  if (!isTouchDevice) return; // never harass desktop users
   const w = window.innerWidth || document.documentElement.clientWidth || screen.width;
   const h = window.innerHeight || document.documentElement.clientHeight || screen.height;
   const key = `${w}x${h}`;
   if (key === lastOrientationCheck) return; // no change
   lastOrientationCheck = key;
 
-  const isPortrait = h > w && Math.min(w, h) < 768;
+  const isPortrait = h > w;
 
   if (isPortrait) {
     document.body.classList.add('show-rotate');
@@ -379,31 +392,35 @@ function hslToHex(h, s, l) {
 }
 
 // --- Spawn Gators ---
-function spawnGator(rng, stage = 'adult') {
+function spawnGator(rng, stage = 'adult', opts = {}) {
   const stageData = GATOR_STAGES[stage];
   const id = world.create();
   const colors = randomGatorColors(rng);
 
   world.add(id, 'transform', {
-    x: rng.float(20, CANVAS_W - 40),
-    y: waterY - rng.float(2, 8),
+    x: opts.x ?? rng.float(20, CANVAS_W - 40),
+    y: opts.y ?? (waterY - rng.float(2, 8)),
     vx: 0, vy: 0,
     direction: rng.chance(0.5) ? 1 : -1,
   });
 
+  const sex = opts.sex || (rng.chance(0.5) ? 'male' : 'female');
   const gatorComp = {
     stage, frame: 'idle',
     spriteW: stageData.width, spriteH: stageData.height,
-    sex: rng.chance(0.5) ? 'male' : 'female',
+    sex,
     age: 0, hunger: rng.float(0.1, 0.4), energy: rng.float(0.6, 1.0), health: 1.0,
     state: null, stateTimer: 0, targetId: null,
     blinkTimer: rng.float(2, 6), breatheTimer: rng.float(6, 12), breatheOffset: 0,
     inWater: false, generation: 0, mealCount: 0, sizeScale: 1,
-    traits: {
+    traits: opts.traits || {
       speed: rng.float(0.7, 1.3), maxSize: rng.float(0.8, 1.2),
       aggression: rng.float(0.2, 0.8), fertility: rng.float(0.3, 0.7),
       metabolism: rng.float(0.7, 1.3), ...colors,
     },
+    name: opts.name,
+    lineageId: opts.lineageId,
+    founder: !!opts.founder,
   };
 
   // Golden gator — 1-in-100 chance
@@ -422,7 +439,7 @@ function spawnGator(rng, stage = 'adult') {
 // --- Spawn Gator from Parents ---
 let maxGeneration = 0;
 
-function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) {
+function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen, lineageId) {
   const stageData = GATOR_STAGES['egg'];
   const id = world.create();
   const traits = inheritTraits(motherTraits, fatherTraits, rng);
@@ -434,14 +451,18 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
     direction: rng.chance(0.5) ? 1 : -1,
   });
 
+  const sex = rng.chance(0.5) ? 'male' : 'female';
   const gatorComp = {
     stage: 'egg', frame: 'idle',
     spriteW: stageData.width, spriteH: stageData.height,
-    sex: rng.chance(0.5) ? 'male' : 'female',
+    sex,
     age: 0, hunger: 0.2, energy: 1.0, health: 1.0,
     state: 'egg', stateTimer: 15,
     targetId: null, blinkTimer: 99, breatheTimer: 99, breatheOffset: 0,
     inWater: false, generation: gen, mealCount: 0, sizeScale: 1, traits,
+    // Named-lineage children get auto-generated names too
+    name: lineageId ? randomGatorName(rng, sex) : undefined,
+    lineageId: lineageId || undefined,
   };
 
   // Golden gator — 1-in-100 chance
@@ -459,14 +480,29 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen) 
 
 let simTime = 0;
 
-// --- Fire system ---
-// Declared before the load block below because updateVegGrowth() reads
-// fireState.fires.length and the fast-forward path calls updateVegGrowth at init.
+// --- Fire / Wildlife / Particles ---
+// Declared before the load block below because updateVegGrowth() can call
+// triggerSurprise() during the fast-forward path at init, which touches all
+// three. Construction is order-independent; they're just empty containers.
 const fireState = createFireState();
+const wildlifeState = createWildlifeState();
+const particles = createParticleState();
+
+// --- Mode + Dynasty state (set by load or by mode-picker overlay) ---
+let gameMode = MODE_TERRARIUM; // default for fresh/terrarium starts
+let dynasty = null;            // { id, name, foundedAt, founderNames } when in dynasty mode
+let lineagePoints = loadLineagePoints();
+let dynastyFounderIds = [];    // ids of founders, tracked for extinction check
+let extinctionGraceTimer = 0;  // don't trigger game-over during the first few seconds of a new dynasty
 
 // --- Load Saved State or Fresh Start ---
 const savedState = persistence.load();
+let needsModePicker = false;
 if (savedState && Array.isArray(savedState.gators) && savedState.gators.length > 0) {
+  // Restore mode/dynasty if present, default to terrarium for older saves
+  gameMode = savedState.mode === MODE_DYNASTY ? MODE_DYNASTY : MODE_TERRARIUM;
+  dynasty = savedState.dynasty || null;
+
   // Restore gators with trait defaults — handles older saves missing newer trait fields
   const TRAIT_DEFAULTS = { speed: 1, maxSize: 1, aggression: 0.5, fertility: 0.5, metabolism: 1 };
   for (const saved of savedState.gators) {
@@ -508,7 +544,9 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
         physicsSystem(world, tickDt, terrain, waterY, rng);
         world.flush();
         simTime += tickDt;
-        if (world.count('gator') === 0) {
+        // In terrarium mode, repopulate if everything dies. Dynasty mode lets the
+        // bloodline truly die — extinction is detected in the live game loop.
+        if (gameMode === MODE_TERRARIUM && world.count('gator') === 0) {
           for (let i = 0; i < rng.range(3, 5); i++) spawnGator(rng, 'adult');
         }
       }
@@ -521,11 +559,9 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
     vegState.age += elapsed;
   }
 } else {
-  // Fresh start
-  const initialCount = rng.range(4, 6);
-  for (let i = 0; i < initialCount; i++) {
-    spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile', 'juvenile', 'adult']));
-  }
+  // No save — show mode picker before spawning anything. The game loop can still
+  // start running (rendering landscape + wildlife); gators come in after choice.
+  needsModePicker = true;
 }
 
 // --- Rival Gator System ---
@@ -569,9 +605,6 @@ function spawnRivalGator(rng) {
 
 // --- The Deep ---
 const deepState = { shadowX: -50, shadowActive: false, shadowTimer: 30, rippleTimer: 15, shadowDir: 1, eyeFlash: 0 };
-
-// --- Wildlife System ---
-const wildlifeState = createWildlifeState();
 
 // --- Food ---
 let foodSpawnTimer = rng.float(FOOD_SPAWN_MIN, FOOD_SPAWN_MAX);
@@ -693,9 +726,6 @@ function preySystem(world, dt, simTime, rng) {
 
 
 // --- God Powers ---
-
-// --- PARTICLE SYSTEMS ---
-const particles = createParticleState();
 
 // --- SKULL GRAVEYARD ---
 const skulls = [];
@@ -908,6 +938,18 @@ function renderFullUI(ctx, simTime) {
     drawPixelText(ctx, epochLabel, CANVAS_W - epochLabel.length * 4 - 2, 3);
   }
 
+  // Dynasty HUD — top-center bloodline status
+  if (gameMode === MODE_DYNASTY && dynasty) {
+    const aliveCount = countLivingBloodline(world, dynasty.id);
+    const label = `${dynasty.name}`.toLowerCase();
+    ctx.fillStyle = '#6aaa5a';
+    const labelX = Math.floor(CANVAS_W / 2 - label.length * 2);
+    drawPixelText(ctx, label, labelX, 3);
+    const sub = `gen:${maxGeneration}  blood:${aliveCount}`;
+    ctx.fillStyle = aliveCount <= 2 ? '#aa5a5a' : '#4a6a4a';
+    drawPixelText(ctx, sub, Math.floor(CANVAS_W / 2 - sub.length * 2), 9);
+  }
+
   // Mute indicator
   if (isMuted()) {
     ctx.fillStyle = '#554444';
@@ -977,8 +1019,323 @@ function renderTheDeep(ctx, deepState, waterY, simTime) {
 
 // --- Save on unload ---
 window.addEventListener('beforeunload', () => {
-  persistence.save(world, env, simTime, maxGeneration, vegState);
+  persistence.save(world, env, simTime, maxGeneration, vegState, { mode: gameMode, dynasty });
 });
+
+// --- Title screen / founding pair / dynasty extinction UI ---
+const titleScreen = document.getElementById('title-screen');
+const titleMainMenu = document.getElementById('title-main');
+const titleTerrSubmenu = document.getElementById('title-terrarium-submenu');
+const titleDynSubmenu = document.getElementById('title-dynasty-submenu');
+const foundingPair = document.getElementById('founding-pair');
+const gameOverOverlay = document.getElementById('game-over');
+const MAX_REROLLS = 5;
+let pendingFounders = null;     // { dynastyId, name, rerollsLeft, male, female }
+let dynastyExtinct = false;     // set when bloodline is gone (dynasty mode)
+let dynastyStats = null;        // populated on extinction for the overlay
+
+// Does the loaded save actually contain gameplay state we can resume?
+const hasSavedSession = !!(savedState && Array.isArray(savedState.gators) && savedState.gators.length > 0);
+const savedSessionMode = hasSavedSession ? (savedState.mode === MODE_DYNASTY ? MODE_DYNASTY : MODE_TERRARIUM) : null;
+
+function setTitleMenu(which) {
+  if (!titleScreen) return;
+  titleMainMenu?.classList.toggle('hidden', which !== 'main');
+  titleTerrSubmenu?.classList.toggle('hidden', which !== 'terrarium');
+  titleDynSubmenu?.classList.toggle('hidden', which !== 'dynasty');
+}
+
+function showTitleScreen() {
+  if (!titleScreen) {
+    // Fallback — if the title markup isn't there, default to terrarium fresh.
+    startTerrariumFresh();
+    return;
+  }
+  // Title is the entry gate — hide the generic "click to enter" overlay and
+  // let clicks on title buttons resume audio.
+  if (startOverlay) startOverlay.classList.add('hidden');
+  titleScreen.classList.remove('hidden');
+  setTitleMenu('main');
+
+  // Populate continue sub-labels with context from the save
+  const terrSubEl = document.getElementById('terrarium-continue-sub');
+  const dynSubEl = document.getElementById('dynasty-continue-sub');
+  if (terrSubEl && hasSavedSession && savedSessionMode === MODE_TERRARIUM) {
+    const seedShort = String(seed).slice(-10);
+    terrSubEl.textContent = `seed ${seedShort} · gen ${savedState.maxGeneration || 0}`;
+  }
+  if (dynSubEl && hasSavedSession && savedSessionMode === MODE_DYNASTY) {
+    dynSubEl.textContent = savedState.dynasty?.name
+      ? `${savedState.dynasty.name.toLowerCase()} · gen ${savedState.maxGeneration || 0}`
+      : `your bloodline · gen ${savedState.maxGeneration || 0}`;
+  }
+
+  titleScreen.onclick = (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    resumeAudio(); // user gesture — unlocks Web Audio for the rest of the session
+    handleTitleAction(btn.dataset.action);
+  };
+}
+
+function handleTitleAction(action) {
+  switch (action) {
+    case 'dynasty':
+      if (hasSavedSession) {
+        // Save exists — show submenu so user explicitly picks continue vs new.
+        // Hide continue if the saved mode isn't dynasty (you can't continue a
+        // terrarium save as a dynasty).
+        const continueBtn = titleDynSubmenu?.querySelector('[data-action="dynasty-continue"]');
+        if (continueBtn) continueBtn.style.display = (savedSessionMode === MODE_DYNASTY) ? '' : 'none';
+        setTitleMenu('dynasty');
+      } else {
+        // No save — straight to founding pair.
+        titleScreen.classList.add('hidden');
+        showFoundingPair();
+      }
+      break;
+
+    case 'terrarium':
+      if (hasSavedSession) {
+        const continueBtn = titleTerrSubmenu?.querySelector('[data-action="terrarium-continue"]');
+        if (continueBtn) continueBtn.style.display = (savedSessionMode === MODE_TERRARIUM) ? '' : 'none';
+        setTitleMenu('terrarium');
+      } else {
+        titleScreen.classList.add('hidden');
+        startTerrariumFresh();
+      }
+      break;
+
+    case 'terrarium-continue':
+    case 'dynasty-continue':
+      // Saved state is already restored into the world during boot.
+      // "Continue" just dismisses the title.
+      titleScreen.classList.add('hidden');
+      break;
+
+    case 'terrarium-new':
+      // Fresh seed + fresh terrarium — full reload after setting intent flag.
+      startNewRun(MODE_TERRARIUM);
+      break;
+
+    case 'dynasty-new':
+      startNewRun(MODE_DYNASTY);
+      break;
+
+    case 'back':
+      setTitleMenu('main');
+      break;
+  }
+}
+
+// Fresh-run reload: wipe save + seed, set an intent flag so the next boot
+// skips the title and goes straight to the relevant setup path.
+function startNewRun(mode) {
+  try { persistence.clear(); } catch (e) {}
+  try { localStorage.removeItem('idlegator_lastSeed'); } catch (e) {}
+  try { localStorage.setItem('bge_pending_mode', mode); } catch (e) {}
+  window.location.hash = '';
+  window.location.reload();
+}
+
+function startTerrariumFresh() {
+  gameMode = MODE_TERRARIUM;
+  dynasty = null;
+  const initialCount = rng.range(4, 6);
+  for (let i = 0; i < initialCount; i++) {
+    spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile', 'juvenile', 'adult']));
+  }
+}
+
+function rollFounderCandidate(sex) {
+  const colors = randomGatorColors(rng);
+  return {
+    sex,
+    name: randomGatorName(rng, sex),
+    traits: {
+      speed: rng.float(0.7, 1.3),
+      maxSize: rng.float(0.8, 1.2),
+      aggression: rng.float(0.2, 0.8),
+      fertility: rng.float(0.3, 0.7),
+      metabolism: rng.float(0.7, 1.3),
+      ...colors,
+    },
+  };
+}
+
+function describeTrait(t) {
+  const labels = [];
+  if (t.maxSize > 1.1) labels.push('big');
+  else if (t.maxSize < 0.9) labels.push('runty');
+  if (t.speed > 1.15) labels.push('fast');
+  else if (t.speed < 0.85) labels.push('slow');
+  if (t.aggression > 0.65) labels.push('mean');
+  else if (t.aggression < 0.35) labels.push('docile');
+  if (t.fertility > 0.6) labels.push('fertile');
+  return labels.length ? labels.join(' · ') : 'unremarkable';
+}
+
+function renderFounderPreview(canvasEl, sex, traits) {
+  const c = canvasEl.getContext('2d');
+  if (!c) return;
+  c.imageSmoothingEnabled = false;
+  c.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  const sprite = GATOR_STAGES.adult.idle;
+  const tints = { body: traits.bodyColor, belly: traits.bellyColor, dark: traits.darkColor, scute: traits.scuteColor };
+  drawSprite(c, sprite, 2, 1, false, tints);
+}
+
+function refreshFoundingPairUI() {
+  const grid = document.getElementById('founding-pair-grid');
+  const rerollSpan = document.getElementById('founding-rerolls');
+  const nameLabel = document.getElementById('founding-dynasty-name');
+  if (!grid || !pendingFounders) return;
+  if (rerollSpan) rerollSpan.textContent = String(pendingFounders.rerollsLeft);
+  if (nameLabel) nameLabel.textContent = '— ' + pendingFounders.name + ' —';
+  grid.innerHTML = '';
+  for (const founder of [pendingFounders.male, pendingFounders.female]) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bge-founder';
+    const canvasEl = document.createElement('canvas');
+    canvasEl.className = 'bge-founder-preview';
+    canvasEl.width = 28; canvasEl.height = 10;
+    wrap.appendChild(canvasEl);
+    const sexEl = document.createElement('div');
+    sexEl.className = 'bge-founder-sex';
+    sexEl.textContent = founder.sex;
+    wrap.appendChild(sexEl);
+    const input = document.createElement('input');
+    input.className = 'bge-founder-name';
+    input.maxLength = 20;
+    input.value = founder.name;
+    input.oninput = (e) => { founder.name = e.target.value.slice(0, 20); };
+    wrap.appendChild(input);
+    const trait = document.createElement('div');
+    trait.className = 'bge-founder-trait';
+    trait.textContent = describeTrait(founder.traits);
+    wrap.appendChild(trait);
+    grid.appendChild(wrap);
+    renderFounderPreview(canvasEl, founder.sex, founder.traits);
+  }
+}
+
+function showFoundingPair() {
+  if (!foundingPair) { startTerrariumFresh(); return; }
+  pendingFounders = {
+    dynastyId: 'dyn_' + rng.range(1e6, 9e6).toString(36),
+    name: randomDynastyName(rng),
+    rerollsLeft: MAX_REROLLS,
+    male: rollFounderCandidate('male'),
+    female: rollFounderCandidate('female'),
+  };
+  foundingPair.classList.remove('hidden');
+  refreshFoundingPairUI();
+  const rerollBtn = document.getElementById('founding-reroll');
+  const beginBtn = document.getElementById('founding-begin');
+  if (rerollBtn) rerollBtn.onclick = () => {
+    if (!pendingFounders || pendingFounders.rerollsLeft <= 0) return;
+    pendingFounders.rerollsLeft--;
+    pendingFounders.male = rollFounderCandidate('male');
+    pendingFounders.female = rollFounderCandidate('female');
+    pendingFounders.name = randomDynastyName(rng);
+    refreshFoundingPairUI();
+  };
+  if (beginBtn) beginBtn.onclick = () => {
+    if (!pendingFounders) return;
+    commitFounders();
+    foundingPair.classList.add('hidden');
+  };
+}
+
+function commitFounders() {
+  const p = pendingFounders;
+  if (!p) return;
+  gameMode = MODE_DYNASTY;
+  dynasty = {
+    id: p.dynastyId,
+    name: p.name,
+    foundedAt: Date.now(),
+    founderNames: [p.male.name, p.female.name],
+    eraReached: 0,
+  };
+  extinctionGraceTimer = 30; // 30s of grace so a stray event doesn't end it frame 1
+  dynastyFounderIds = [];
+  const maleId = spawnGator(rng, 'adult', {
+    x: CANVAS_W * 0.4, y: waterY - 3,
+    sex: 'male', traits: p.male.traits,
+    name: p.male.name, lineageId: p.dynastyId, founder: true,
+  });
+  const femaleId = spawnGator(rng, 'adult', {
+    x: CANVAS_W * 0.55, y: waterY - 3,
+    sex: 'female', traits: p.female.traits,
+    name: p.female.name, lineageId: p.dynastyId, founder: true,
+  });
+  dynastyFounderIds.push(maleId, femaleId);
+  pendingFounders = null;
+}
+
+function showDynastyGameOver() {
+  dynastyExtinct = true;
+  // Tally stats for the obituary
+  dynastyStats = {
+    name: dynasty?.name || 'dynasty',
+    generationsReached: maxGeneration,
+    daysLived: Math.floor(simTime / 60), // rough sim-days proxy
+    lineagePointsEarned: Math.max(1, maxGeneration * 10 + Math.floor(simTime / 30)),
+  };
+  lineagePoints += dynastyStats.lineagePointsEarned;
+  saveLineagePoints(lineagePoints);
+  if (!gameOverOverlay) return;
+  const statsEl = document.getElementById('game-over-stats');
+  if (statsEl) {
+    statsEl.innerHTML =
+      `<div><span class="bge-label">dynasty:</span> <span class="bge-value">${dynastyStats.name}</span></div>` +
+      `<div><span class="bge-label">founders:</span> <span class="bge-value">${(dynasty?.founderNames || []).join(' · ')}</span></div>` +
+      `<div><span class="bge-label">generations:</span> <span class="bge-value">${dynastyStats.generationsReached}</span></div>` +
+      `<div><span class="bge-label">days lived:</span> <span class="bge-value">${dynastyStats.daysLived}</span></div>` +
+      `<div><span class="bge-label">lineage points:</span> <span class="bge-value">+${dynastyStats.lineagePointsEarned} (${lineagePoints} total)</span></div>`;
+  }
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function resetToFreshDynasty() {
+  // Wipe current world save + seed so we get a brand-new swamp
+  try { persistence.clear(); } catch (e) {}
+  try { localStorage.removeItem('idlegator_lastSeed'); } catch (e) {}
+  window.location.hash = '';
+  window.location.reload();
+}
+
+function resetToTerrarium() {
+  try { persistence.clear(); } catch (e) {}
+  window.location.hash = '';
+  window.location.reload();
+}
+
+const gameOverRestart = document.getElementById('game-over-restart');
+if (gameOverRestart) gameOverRestart.onclick = resetToFreshDynasty;
+const gameOverTerrarium = document.getElementById('game-over-terrarium');
+if (gameOverTerrarium) gameOverTerrarium.onclick = resetToTerrarium;
+
+// Boot flow:
+// 1. If a "new run" intent was stashed by the title screen (via reload), honor it.
+// 2. Otherwise, always show the title screen — even for existing saves, so the user
+//    can choose Continue vs. New without clearing storage manually.
+let pendingNewMode = null;
+try {
+  pendingNewMode = localStorage.getItem('bge_pending_mode');
+  if (pendingNewMode) localStorage.removeItem('bge_pending_mode');
+} catch (e) {}
+
+if (pendingNewMode === MODE_DYNASTY) {
+  if (startOverlay) startOverlay.classList.add('hidden');
+  showFoundingPair();
+} else if (pendingNewMode === MODE_TERRARIUM) {
+  if (startOverlay) startOverlay.classList.add('hidden');
+  startTerrariumFresh();
+} else {
+  showTitleScreen();
+}
 
 // --- Game Loop ---
 let lastTime = 0;
@@ -1160,17 +1517,27 @@ function gameLoop(timestamp) {
     }
   }
 
-  // Population check — GAME OVER if all gators die
-  if (world.count('gator') === 0 && !gameOver) {
-    gameOver = true;
-    gameOverTimer = 0;
+  // Population check — behavior depends on mode.
+  // Terrarium: classic "all gators dead" canvas game-over screen with respawn button.
+  // Dynasty: the bloodline (lineageId matching dynasty.id) is what matters. Non-lineage
+  //   gators coming and going is just ambient life. Extinction = lineage count hits 0.
+  if (gameMode === MODE_DYNASTY && dynasty && !dynastyExtinct) {
+    if (extinctionGraceTimer > 0) extinctionGraceTimer -= dt;
+    else if (countLivingBloodline(world, dynasty.id) === 0) {
+      showDynastyGameOver();
+    }
+  } else if (gameMode === MODE_TERRARIUM) {
+    if (world.count('gator') === 0 && !gameOver) {
+      gameOver = true;
+      gameOverTimer = 0;
+    }
   }
 
   world.flush();
 
   // Auto-save
   if (persistence.shouldAutoSave(dt)) {
-    persistence.save(world, env, simTime, maxGeneration, vegState);
+    persistence.save(world, env, simTime, maxGeneration, vegState, { mode: gameMode, dynasty });
   }
 
   // --- Render ---

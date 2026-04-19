@@ -51,6 +51,80 @@
   <div id="start-overlay" role="button" tabindex="0" aria-label="Click or press Enter to enter the swamp">
     <div id="start-text">click to enter the swamp</div>
   </div>
+
+  <div id="title-screen" class="title-overlay hidden" role="dialog" aria-labelledby="title-heading">
+    <div class="title-vignette title-vignette-top"></div>
+    <div class="title-vignette title-vignette-bottom"></div>
+
+    <div class="title-inner">
+      <div class="title-header">
+        <div class="title-big" id="title-heading">BIG GATOR ENERGY</div>
+        <div class="title-sub">a persistent pixel art swamp</div>
+      </div>
+
+      <div id="title-main" class="title-menu">
+        <button type="button" class="title-btn" data-action="dynasty">
+          <span class="title-btn-main">dynasty</span>
+          <span class="title-btn-sub">one bloodline · permadeath</span>
+        </button>
+        <button type="button" class="title-btn" data-action="terrarium">
+          <span class="title-btn-main">terrarium</span>
+          <span class="title-btn-sub">no stakes · just vibes</span>
+        </button>
+      </div>
+
+      <div id="title-terrarium-submenu" class="title-menu hidden">
+        <div class="title-section-label">terrarium mode</div>
+        <button type="button" class="title-btn" data-action="terrarium-continue">
+          <span class="title-btn-main">continue</span>
+          <span class="title-btn-sub" id="terrarium-continue-sub">your existing swamp</span>
+        </button>
+        <button type="button" class="title-btn" data-action="terrarium-new">
+          <span class="title-btn-main">new swamp</span>
+          <span class="title-btn-sub">fresh seed · different terrain</span>
+        </button>
+        <button type="button" class="title-back" data-action="back">back</button>
+      </div>
+
+      <div id="title-dynasty-submenu" class="title-menu hidden">
+        <div class="title-section-label">dynasty mode</div>
+        <button type="button" class="title-btn" data-action="dynasty-continue">
+          <span class="title-btn-main">continue</span>
+          <span class="title-btn-sub" id="dynasty-continue-sub">your bloodline</span>
+        </button>
+        <button type="button" class="title-btn" data-action="dynasty-new">
+          <span class="title-btn-main">new dynasty</span>
+          <span class="title-btn-sub">fresh founders · fresh swamp</span>
+        </button>
+        <button type="button" class="title-back" data-action="back">back</button>
+      </div>
+
+      <div class="title-footer">biggatorenergy.com</div>
+    </div>
+  </div>
+
+  <div id="founding-pair" class="bge-overlay hidden" role="dialog" aria-labelledby="founding-title">
+    <div class="bge-card">
+      <h2 id="founding-title">your founders</h2>
+      <div id="founding-dynasty-name"></div>
+      <div id="founding-pair-grid"></div>
+      <div class="bge-row">
+        <button type="button" class="bge-btn bge-btn-small" id="founding-reroll">reroll (<span id="founding-rerolls">5</span>)</button>
+        <button type="button" class="bge-btn bge-btn-small bge-btn-primary" id="founding-begin">begin dynasty</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-over" class="bge-overlay hidden" role="dialog" aria-labelledby="game-over-title">
+    <div class="bge-card">
+      <h2 id="game-over-title">the bloodline is gone</h2>
+      <div id="game-over-stats"></div>
+      <div class="bge-row">
+        <button type="button" class="bge-btn bge-btn-small" id="game-over-terrarium">watch the swamp</button>
+        <button type="button" class="bge-btn bge-btn-small bge-btn-primary" id="game-over-restart">new dynasty</button>
+      </div>
+    </div>
+  </div>
   <div id="rotate-prompt" role="alert">
     <div id="rotate-icon" aria-hidden="true">&#8635;</div>
     <div id="rotate-text">rotate your device</div>
@@ -60,6 +134,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=20260419-2"></script>
 </body>
 </html>

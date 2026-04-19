@@ -99,7 +99,10 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
         if (gator.sex === 'female') {
           gator.isPregnant = true;
           gator.pregnancyTimer = PREGNANCY_DURATION;
-          gator.mateTraits = world.get(gator.matePartner, 'gator')?.traits || null;
+          const mate = world.get(gator.matePartner, 'gator');
+          gator.mateTraits = mate?.traits || null;
+          // Track the male's lineage so offspring inherit either parent's bloodline.
+          gator.mateLineageId = mate?.lineageId || null;
         }
         gator.state = 'idle';
         gator.stateTimer = rng.float(3, 8);
@@ -127,6 +130,8 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
           parentTraits: gator.traits,
           mateTraits: gator.mateTraits,
           generation: gator.generation,
+          // Pass lineage from either parent — either parent carrying it is enough.
+          lineageId: gator.lineageId || gator.mateLineageId || null,
         };
         gator.state = 'guarding';
         gator.stateTimer = 10;
@@ -142,12 +147,14 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
           { x: nest.x + rng.float(-6, 6), y: nest.y - rng.float(0, 2) },
           nest.parentTraits,
           nest.mateTraits,
-          nest.generation
+          nest.generation,
+          nest.lineageId
         );
       }
       gator.nest = null;
       gator.nestHatchReady = false;
       gator.mateTraits = null;
+      gator.mateLineageId = null;
     }
 
     // Fighting — males in close proximity with high aggression
