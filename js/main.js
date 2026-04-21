@@ -1022,6 +1022,30 @@ window.addEventListener('beforeunload', () => {
   persistence.save(world, env, simTime, maxGeneration, vegState, { mode: gameMode, dynasty });
 });
 
+// --- Title backdrop ---
+// One-time static frame painted behind the title screen. Renders the stage
+// the player is about to inherit — sky + moon + terrain + water + vegetation —
+// with no creatures, no animation, no time passing. A still photograph.
+function paintTitleBackdrop() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  // Force a contemplative dusk on the title — consistent with the OG preview.
+  const titleEnv = {
+    ...env,
+    timeOfDay: 0.78, // dusk
+    season: env.season || 'summer',
+    weather: 'clear',
+    rainIntensity: 0,
+    foodMultiplier: 1,
+  };
+  const titleTime = 0; // frozen — no wave animation
+  const titleVegRng = createRNG(rng._seed + 999);
+  renderSky(ctx, waterY, titleTime, titleEnv);
+  renderCelestial(ctx, titleEnv, waterY, titleTime);
+  renderTerrain(ctx, terrain, waterY);
+  renderWater(ctx, waterY, titleTime);
+  renderVegetation(ctx, terrain, waterY, titleVegRng, titleTime, vegState, titleEnv);
+}
+
 // --- Title screen / founding pair / dynasty extinction UI ---
 const titleScreen = document.getElementById('title-screen');
 const titleMainMenu = document.getElementById('title-main');
@@ -1071,12 +1095,62 @@ function showTitleScreen() {
   }
 
   titleScreen.onclick = (e) => {
+    const infoBtn = e.target.closest('[data-info]');
+    if (infoBtn) {
+      showInfoPopover(infoBtn.dataset.info);
+      return;
+    }
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     resumeAudio(); // user gesture — unlocks Web Audio for the rest of the session
     handleTitleAction(btn.dataset.action);
   };
 }
+
+const MODE_INFO = {
+  dynasty: {
+    heading: 'dynasty mode',
+    // Keep text thoughtful and observed — not congratulatory.
+    body: `you choose <em>two founders</em>. they breed. their line breeds. the bloodline
+      thins over generations — hunters, disasters, old age, the herons.<br><br>
+      when the last of your line dies, the swamp carries on without you. you earn
+      <em>lineage points</em> for every generation survived. spend them on new founders,
+      new traits, new biomes between runs.<br><br>
+      <em>permanent. unforgiving. the good kind.</em>`,
+  },
+  terrarium: {
+    heading: 'terrarium mode',
+    body: `an <em>aquarium</em>. no goals, no losing. gators live and die freely,
+      the world goes on. god powers are unlimited. nothing is tracked.<br><br>
+      <em>for watching. for decompressing. for putting on the second monitor.</em>`,
+  },
+};
+
+function showInfoPopover(which) {
+  const pop = document.getElementById('title-info-popover');
+  const heading = document.getElementById('title-info-heading');
+  const body = document.getElementById('title-info-body');
+  if (!pop || !heading || !body) return;
+  const info = MODE_INFO[which];
+  if (!info) return;
+  heading.textContent = info.heading;
+  body.innerHTML = info.body;
+  pop.classList.remove('hidden');
+}
+
+function hideInfoPopover() {
+  const pop = document.getElementById('title-info-popover');
+  if (pop) pop.classList.add('hidden');
+}
+
+// Close button + Escape key dismiss
+document.addEventListener('click', (e) => {
+  const closeBtn = e.target.closest('[data-action="info-close"]');
+  if (closeBtn) hideInfoPopover();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideInfoPopover();
+});
 
 function handleTitleAction(action) {
   switch (action) {
@@ -1109,8 +1183,9 @@ function handleTitleAction(action) {
     case 'terrarium-continue':
     case 'dynasty-continue':
       // Saved state is already restored into the world during boot.
-      // "Continue" just dismisses the title.
+      // "Continue" just dismisses the title and starts the simulation.
       titleScreen.classList.add('hidden');
+      simulationStarted = true;
       break;
 
     case 'terrarium-new':
@@ -1145,6 +1220,7 @@ function startTerrariumFresh() {
   for (let i = 0; i < initialCount; i++) {
     spawnGator(rng, rng.pick(['adult', 'adult', 'juvenile', 'juvenile', 'adult']));
   }
+  simulationStarted = true;
 }
 
 function rollFounderCandidate(sex) {
@@ -1272,6 +1348,7 @@ function commitFounders() {
   });
   dynastyFounderIds.push(maleId, femaleId);
   pendingFounders = null;
+  simulationStarted = true;
 }
 
 function showDynastyGameOver() {
@@ -1341,8 +1418,26 @@ if (pendingNewMode === MODE_DYNASTY) {
 let lastTime = 0;
 let gameOver = false;
 let gameOverTimer = 0;
+// Render-freeze flag — when false, the game loop skips all simulation + animation
+// and leaves the one-time static title backdrop on screen. Flipped to true when the
+// user picks Continue / commits founders / starts terrarium fresh.
+let simulationStarted = false;
+let titleBackdropPainted = false;
 
 function gameLoop(timestamp) {
+  // Title-screen render freeze: paint a single static backdrop frame, then
+  // skip every subsequent frame until the player commits to a mode. No
+  // simulation, no audio updates, no time passing.
+  if (!simulationStarted) {
+    if (!titleBackdropPainted) {
+      paintTitleBackdrop();
+      titleBackdropPainted = true;
+    }
+    lastTime = timestamp; // keep dt from ballooning once sim starts
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   if (!lastTime) lastTime = timestamp;
   let dt = (timestamp - lastTime) / 1000;
   if (dt > MAX_DT) dt = MAX_DT;

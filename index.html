@@ -63,14 +63,26 @@
       </div>
 
       <div id="title-main" class="title-menu">
-        <button type="button" class="title-btn" data-action="dynasty">
-          <span class="title-btn-main">dynasty</span>
-          <span class="title-btn-sub">one bloodline · permadeath</span>
-        </button>
-        <button type="button" class="title-btn" data-action="terrarium">
-          <span class="title-btn-main">terrarium</span>
-          <span class="title-btn-sub">no stakes · just vibes</span>
-        </button>
+        <div class="title-row">
+          <button type="button" class="title-btn" data-action="dynasty">
+            <span class="title-btn-main">dynasty</span>
+            <span class="title-btn-sub">one bloodline · permadeath</span>
+          </button>
+          <button type="button" class="title-info" data-info="dynasty" aria-label="About dynasty mode">?</button>
+        </div>
+        <div class="title-row">
+          <button type="button" class="title-btn" data-action="terrarium">
+            <span class="title-btn-main">terrarium</span>
+            <span class="title-btn-sub">no stakes · just vibes</span>
+          </button>
+          <button type="button" class="title-info" data-info="terrarium" aria-label="About terrarium mode">?</button>
+        </div>
+      </div>
+
+      <div id="title-info-popover" class="title-info-popover hidden" role="dialog" aria-live="polite">
+        <div class="title-info-heading" id="title-info-heading"></div>
+        <div class="title-info-body" id="title-info-body"></div>
+        <button type="button" class="title-info-close" data-action="info-close">close</button>
       </div>
 
       <div id="title-terrarium-submenu" class="title-menu hidden">
@@ -134,6 +146,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260419-2"></script>
+  <script type="module" src="js/main.js?v=20260420-1"></script>
 </body>
 </html>
