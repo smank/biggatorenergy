@@ -140,27 +140,126 @@ export function renderEraHUD(ctx, dynasty, drawPixelText, CANVAS_W, CANVAS_H) {
   if (fillW > 0) ctx.fillRect(barX, barY, fillW, 2);
 }
 
-// Swamp-flavored name pools — a bit Faulkner, a bit Beasts of the Southern Wild.
-const FIRST_NAMES_M = [
-  'Gus', 'Boss', 'Tusk', 'Scales', 'Drake', 'Moss', 'Hank', 'Otis', 'Cypress',
-  'Bayou', 'Rook', 'Mud', 'Jubal', 'Caliph', 'Thane', 'Hoot', 'Gator', 'Jed',
-  'Ezra', 'Wade', 'Grit', 'Reuben', 'Cleat',
+// Name pools — a deliberate mess. Faulkner meets dad-from-Florida meets
+// posh-British meets office-coworker. The funny is in the variety.
+// Adding a single Gary, Brenda, or Reginald to a pool of Cypress and Mossie
+// lands harder than 30 swamp-themed names ever could.
+
+// Swamp / regional / Southern Gothic
+const FIRST_NAMES_M_SWAMP = [
+  'Gus', 'Boss', 'Tusk', 'Scales', 'Drake', 'Moss', 'Hank', 'Otis',
+  'Cypress', 'Bayou', 'Rook', 'Mud', 'Jubal', 'Thane', 'Hoot', 'Gator',
+  'Jed', 'Ezra', 'Wade', 'Grit', 'Reuben', 'Cleat', 'Beauregard',
+  'Earl', 'Buford', 'Thaddeus', 'Cooter', 'Bo', 'Boudreaux', 'Hoyt',
 ];
-const FIRST_NAMES_F = [
-  'Pearl', 'Mama', 'Delta', 'Vine', 'Ruby', 'Sable', 'Iris', 'Hazel', 'Willow',
-  'Marsh', 'Cricket', 'Opal', 'Bramble', 'Loretta', 'Juno', 'Wren', 'Fen',
-  'Odessa', 'Mossie', 'Clover', 'Sage',
+// Mundane modern names — the Gary tier
+const FIRST_NAMES_M_MUNDANE = [
+  'Gary', 'Steve', 'Larry', 'Kevin', 'Doug', 'Brad', 'Chad', 'Tony',
+  'Mike', 'Dave', 'Greg', 'Todd', 'Brian', 'Jeff', 'Scott', 'Dennis',
+  'Dale', 'Randy', 'Ron', 'Curt', 'Phil', 'Rick', 'Wayne',
 ];
-const PREFIXES = ['Old', 'Big', 'One-Eye', 'Fat', 'Black', 'Silent', 'Crooked'];
-const SUFFIXES = ['the Elder', 'the Long', 'of the Marsh', 'Longtooth', 'Ironhide'];
+// Old-fashioned / mid-century
+const FIRST_NAMES_M_OLD = [
+  'Cletus', 'Herbert', 'Wilbur', 'Murray', 'Lenny', 'Walter', 'Stanley',
+  'Eugene', 'Norman', 'Harold', 'Floyd', 'Mortimer', 'Elmer', 'Vernon',
+  'Sheldon', 'Sylvester', 'Roscoe', 'Clarence',
+];
+// Posh / British
+const FIRST_NAMES_M_POSH = [
+  'Reginald', 'Cornelius', 'Archibald', 'Bartholomew', 'Percival',
+  'Theodore', 'Sebastian', 'Montgomery', 'Cuthbert', 'Algernon',
+];
+// Tough / silly nicknames
+const FIRST_NAMES_M_TOUGH = [
+  'Tank', 'Buck', 'Crash', 'Chomps', 'Snap', 'Biggums', 'Toothy',
+  'Spike', 'Grunt', 'Knuckles', 'Diesel', 'Gronk',
+];
+
+const FIRST_NAMES_F_SWAMP = [
+  'Pearl', 'Mama', 'Delta', 'Vine', 'Ruby', 'Sable', 'Iris', 'Hazel',
+  'Willow', 'Marsh', 'Cricket', 'Opal', 'Bramble', 'Loretta', 'Juno',
+  'Wren', 'Fen', 'Odessa', 'Mossie', 'Clover', 'Sage', 'Magnolia',
+  'Tallulah', 'Birdie', 'Cordelia', 'Reba', 'Maybelle',
+];
+const FIRST_NAMES_F_MUNDANE = [
+  'Brenda', 'Karen', 'Linda', 'Diane', 'Carol', 'Janet', 'Susan',
+  'Pam', 'Cheryl', 'Sandy', 'Becky', 'Donna', 'Tammy', 'Wendy',
+  'Kim', 'Patty', 'Joanne', 'Robin',
+];
+const FIRST_NAMES_F_OLD = [
+  'Eunice', 'Mildred', 'Agnes', 'Beatrice', 'Penelope', 'Gladys',
+  'Edna', 'Doris', 'Ethel', 'Hazel', 'Mavis', 'Bertha', 'Hortense',
+  'Prudence', 'Wilhelmina',
+];
+const FIRST_NAMES_F_POSH = [
+  'Penelope', 'Octavia', 'Cordelia', 'Genevieve', 'Persephone',
+  'Anastasia', 'Evangeline', 'Theodora',
+];
+const FIRST_NAMES_F_CUTE = [
+  'Bitey', 'Chompers', 'Wiggles', 'Snappy', 'Nibbles', 'Tootsie',
+  'Boopy', 'Smoosh', 'Princess', 'Doodle',
+];
+
+// Pool weights — swamp/mundane carry the bulk, others are spice
+function pickFirstName(rng, sex) {
+  const roll = rng.random();
+  const m = sex !== 'female';
+  if (roll < 0.32) return rng.pick(m ? FIRST_NAMES_M_SWAMP : FIRST_NAMES_F_SWAMP);
+  if (roll < 0.62) return rng.pick(m ? FIRST_NAMES_M_MUNDANE : FIRST_NAMES_F_MUNDANE);
+  if (roll < 0.78) return rng.pick(m ? FIRST_NAMES_M_OLD : FIRST_NAMES_F_OLD);
+  if (roll < 0.92) return rng.pick(m ? FIRST_NAMES_M_TOUGH : FIRST_NAMES_F_CUTE);
+  return rng.pick(m ? FIRST_NAMES_M_POSH : FIRST_NAMES_F_POSH);
+}
+
+const PREFIXES = [
+  'Old', 'Big', 'Tiny', 'Fat', 'Black', 'White', 'Silent', 'Crooked',
+  'Sweet', 'Wild', 'Sad', 'Mad', 'Lazy', 'Holy', 'Boring', 'Three-Toed',
+  'Half-Tail', 'One-Eye', 'Bug-Eye', 'Bent-Snout', 'Twin-Tooth', 'Limpy',
+  'Wet', 'Dry', 'Honest', 'Two-Time',
+];
+
+// Honorifics that REPLACE the first-name slot (with their own surname optional)
+const HONORIFICS = [
+  'Lord', 'Lady', 'Saint', 'Doctor', 'Captain', 'Sheriff', 'Mister',
+  'Miss', 'Coach', 'Senator', 'Pastor', 'Detective', 'Judge', 'Mayor',
+  'Reverend', 'Colonel', 'Professor', 'Auntie', 'Uncle',
+];
+
+const SUFFIXES = [
+  'the Elder', 'the Younger', 'the Bold', 'the Quiet', 'the Patient',
+  'the Vain', 'the Awful', 'the Beloved', 'the Returned', 'the Forgotten',
+  'the Third', 'the Long', 'the Great', 'the Tired', 'the Ready',
+  'the Hungry', 'the Lost', 'the Wet', 'the Late', 'the Honest',
+  'of the Marsh', 'of the Reeds', 'of the Cypress', 'of the Deep',
+  'of the Moon', 'of the South', 'of Nowhere', 'of the Bog',
+  'Longtooth', 'Ironhide', 'Greatjaw', 'Slowfoot', 'Wetnose', 'Halftail',
+  'esquire', 'M.D.', 'Jr.', 'Sr.', 'PhD',
+];
+
+// Standalone "title-only" names that replace the whole construction
+const TITLE_NAMES = [
+  'The Pope', 'Mister Tuesday', 'Big Daddy', 'Mr. Shoes', 'The Mayor',
+  'The Dentist', 'The Plumber', 'The IRS', 'Two Beers', 'The Returned',
+  'No Name', 'A Stranger', 'Whoever', 'God\'s Mistake',
+];
 
 export function randomGatorName(rng, sex) {
-  const pool = sex === 'female' ? FIRST_NAMES_F : FIRST_NAMES_M;
-  const first = rng.pick(pool);
-  // 20% chance of a prefix, 10% of a suffix — flavor without overdoing it.
-  const prefix = rng.chance(0.2) ? rng.pick(PREFIXES) + ' ' : '';
-  const suffix = rng.chance(0.1) ? ' ' + rng.pick(SUFFIXES) : '';
-  return (prefix + first + suffix).slice(0, 24);
+  // 4% — pure title names (Mister Tuesday, The Pope)
+  if (rng.chance(0.04)) return rng.pick(TITLE_NAMES);
+
+  // 8% — honorific replaces the first name (Doctor Brenda, Coach Gary)
+  if (rng.chance(0.08)) {
+    const honor = rng.pick(HONORIFICS);
+    const first = pickFirstName(rng, sex);
+    const suffix = rng.chance(0.2) ? ' ' + rng.pick(SUFFIXES) : '';
+    return (honor + ' ' + first + suffix).slice(0, 28);
+  }
+
+  const first = pickFirstName(rng, sex);
+  // 35% prefix, 30% suffix — way more spice than before
+  const prefix = rng.chance(0.35) ? rng.pick(PREFIXES) + ' ' : '';
+  const suffix = rng.chance(0.30) ? ' ' + rng.pick(SUFFIXES) : '';
+  return (prefix + first + suffix).slice(0, 28);
 }
 
 export function randomDynastyName(rng) {
