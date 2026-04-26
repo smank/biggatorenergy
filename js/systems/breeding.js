@@ -3,6 +3,7 @@
 import { GATOR_STAGES } from '../sprites/gator-sprites.js';
 import { blendColors } from '../utils/colors.js';
 import { distance } from '../utils/math.js';
+import { addMoment } from '../game/obituary.js';
 
 const MATE_COOLDOWN = 25;       // seconds between mating attempts
 const PREGNANCY_DURATION = 10;  // seconds of pregnancy
@@ -10,7 +11,7 @@ const EGG_INCUBATION = 8;       // seconds for eggs to hatch
 const COURTSHIP_RANGE = 45;     // pixels
 const COURTSHIP_DURATION = 3;   // seconds of courtship before mating
 
-export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
+export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState) {
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
     // Only adults can breed
     if (gator.stage !== 'adult') continue;
@@ -150,6 +151,16 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents) {
           nest.generation,
           nest.lineageId
         );
+      }
+      // Notable moment for named mothers
+      if (obituaryState && gator.name) {
+        const n = gator.name.toUpperCase();
+        addMoment(obituaryState, {
+          text: `${n}'s clutch hatched. ${nest.eggs} of them.`,
+          x: null,
+          y: null,
+          color: '#cce0b8',
+        });
       }
       gator.nest = null;
       gator.nestHatchReady = false;

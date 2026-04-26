@@ -1,6 +1,7 @@
 // Dramatic events system — lightning strikes, UFO abductions, celestial events, tragedy
 
 import { CANVAS_W, CANVAS_H } from '../config.js';
+import { logDeath } from '../game/obituary.js';
 
 export function createEventSystem() {
   return {
@@ -20,7 +21,7 @@ export function createEventSystem() {
   };
 }
 
-export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
+export function updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState) {
   events.eventTimer -= dt;
 
   // Crash smoke decay
@@ -147,6 +148,10 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           // === OUTCOME CHECK ===
           if (ufo.struggleProgress >= 1) {
             // ABDUCTION SUCCESS — gator taken
+            if (obituaryState) {
+              const victim = world.get(ufo.victimId, 'gator');
+              logDeath(obituaryState, { gator: victim, cause: 'ufo', time: simTime });
+            }
             world.kill(ufo.victimId);
             ufo.victimId = null;
             ufo.abducted = true;
@@ -188,6 +193,10 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
             if (victimTr) {
               if (ufo.struggleProgress > 0.45) {
                 // Close enough — abduction succeeds at the last moment
+                if (obituaryState) {
+                  const victim = world.get(ufo.victimId, 'gator');
+                  logDeath(obituaryState, { gator: victim, cause: 'ufo', time: simTime });
+                }
                 world.kill(ufo.victimId);
                 ufo.abducted = true;
               } else {
@@ -342,7 +351,10 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
           // Fling gator upward if caught
           tr.vy = -20;
           tr.vx = rng.float(-15, 15);
-          if (gator.health <= 0) world.kill(id);
+          if (gator.health <= 0) {
+            if (obituaryState) logDeath(obituaryState, { gator, cause: 'tornado', time: simTime });
+            world.kill(id);
+          }
         }
       }
     }
@@ -472,21 +484,21 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env) {
   // Trigger new events — frequently, this swamp is chaotic
   if (events.eventTimer <= 0) {
     events.eventTimer = rng.float(15, 40);
-    triggerRandomEvent(events, world, rng, waterY, simTime, env);
+    triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState);
   }
 
   // Storm lightning — frequent and dramatic during storms
   if (env.weather === 'storm' && rng.chance(0.2 * dt)) {
-    spawnLightning(events, rng, waterY, world);
+    spawnLightning(events, rng, waterY, world, obituaryState, simTime);
   }
 
   // Random lightning even outside storms (heat lightning)
   if (rng.chance(0.01 * dt)) {
-    spawnLightning(events, rng, waterY, world);
+    spawnLightning(events, rng, waterY, world, obituaryState, simTime);
   }
 }
 
-function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
+function triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState) {
   const isNight = env.timeOfDay < 0.2 || env.timeOfDay > 0.8;
 
   const roll = rng.random();
@@ -508,7 +520,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
       };
     } else if (roll < 0.20) {
       // Lightning strike (heat lightning)
-      spawnLightning(events, rng, waterY, world);
+      spawnLightning(events, rng, waterY, world, obituaryState, simTime);
     } else if (roll < 0.40 && isNight) {
       // Shooting stars — sometimes a burst of them
       const count = rng.range(1, 4);
@@ -595,7 +607,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env) {
   // end triggerRandomEvent
 }
 
-function spawnLightning(events, rng, waterY, world) {
+function spawnLightning(events, rng, waterY, world, obituaryState, simTime) {
   const x = rng.float(10, CANVAS_W - 10);
   const bolt = {
     x,
@@ -624,6 +636,7 @@ function spawnLightning(events, rng, waterY, world) {
       if (rng.chance(0.15)) {
         gator.health -= 0.5;
         if (gator.health <= 0) {
+          if (obituaryState) logDeath(obituaryState, { gator, cause: 'lightning', time: simTime });
           world.kill(id);
         }
         break;

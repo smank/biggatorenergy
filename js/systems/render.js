@@ -1356,3 +1356,44 @@ export function renderUI(ctx, seed, genCount) {
     drawPixelText(ctx, genText, 2, CANVAS_H - 6);
   }
 }
+
+// Render distant industrial smokestacks — silhouettes behind terrain in sky layer.
+// stackSeed: a deterministic number so positions are stable per-run (pass rng._seed).
+export function renderSmokestacks(ctx, waterY, simTime, stackSeed) {
+  // Two stacks at fixed positions derived from seed
+  const positions = [
+    Math.floor(15 + ((stackSeed * 7) % 55)),
+    Math.floor(70 + ((stackSeed * 13) % 80)),
+  ];
+
+  for (let i = 0; i < positions.length; i++) {
+    const sx = positions[i];
+    // Stack height: 20-28 pixels above waterY
+    const stackH = 22 + (i * 6);
+    const stackW = 3;
+    const stackTop = waterY - stackH;
+
+    // Stack body — dark gray silhouette
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(sx, stackTop, stackW, stackH);
+    // Slightly darker edge
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(sx, stackTop, 1, stackH);
+    // Cap
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(sx - 1, stackTop, stackW + 2, 2);
+
+    // Smoke wisps — animated, drifting up and right
+    const smokeColors = ['rgba(80,80,70,0.25)', 'rgba(70,70,60,0.18)', 'rgba(60,60,50,0.12)'];
+    for (let s = 0; s < 4; s++) {
+      const t = (simTime * 0.5 + s * 1.3 + i * 2.1) % 6;
+      const wx = sx + 1 + Math.floor(t * 1.5) + s;
+      const wy = stackTop - Math.floor(t * 3);
+      const size = 2 + Math.floor(t * 0.5);
+      if (wy > 0 && wy < waterY) {
+        ctx.fillStyle = smokeColors[s % smokeColors.length];
+        ctx.fillRect(wx, wy, size, size);
+      }
+    }
+  }
+}

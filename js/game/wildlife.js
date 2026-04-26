@@ -3,6 +3,8 @@
 
 import { CANVAS_W, CANVAS_H } from '../config.js';
 import { distance } from '../utils/math.js';
+import { WILDLIFE_VALID_ERAS } from './dynasty.js';
+import { logDeath } from './obituary.js';
 
 export const WILDLIFE_TYPES = [
   'turtle', 'snake', 'bird', 'butterfly', 'raccoon', 'opossum',
@@ -225,20 +227,30 @@ export function spawnWildlife(rng, type, simTime, waterY) {
  * @param {object} rng - RNG instance
  * @param {object} world - ECS world
  * @param {number} waterY - Water line Y position
- * @param {object} callbacks - { spawnDeathParticles(particles, x, y, color), spawnPrey, particles, playZap, playEat }
+ * @param {object} callbacks - { spawnDeathParticles(particles, x, y, color), spawnPrey, particles, playZap, playEat, obituaryState? }
+ * @param {number} [currentEraId=1] - Current era id for era-gated spawn filtering
  */
-export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks) {
-  const { spawnDeathParticles, spawnPrey, particles, playZap, playEat } = callbacks;
+export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks, currentEraId = 1) {
+  const { spawnDeathParticles, spawnPrey, particles, playZap, playEat, obituaryState } = callbacks;
   const wildlife = state.wildlife;
 
-  // Spawn regular wildlife frequently
-  // Spawn wildlife aggressively — the swamp should be teeming
+  // Build era-valid type list (types without an entry are valid in all eras)
+  const validTypes = WILDLIFE_TYPES.filter(t => {
+    const validEras = WILDLIFE_VALID_ERAS[t];
+    return !validEras || validEras.includes(currentEraId);
+  });
+
+  // Industrial era: nutria weight 3x — add extra copies to the pick pool
+  const spawnPool = currentEraId >= 2
+    ? [...validTypes, 'nutria', 'nutria']
+    : validTypes;
+
+  // Spawn regular wildlife frequently — the swamp should be teeming
   if (wildlife.length < 30) {
-    // Multiple spawn attempts per frame for density
     const spawnAttempts = wildlife.length < 10 ? 3 : 1;
     for (let s = 0; s < spawnAttempts; s++) {
       if (rng.chance(0.4 * dt)) {
-        const type = rng.pick(WILDLIFE_TYPES);
+        const type = rng.pick(spawnPool);
         wildlife.push(spawnWildlife(rng, type, simTime, waterY));
       }
     }
@@ -253,11 +265,14 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
     }
   }
 
-  // Human hunters — show up in boats or on foot
+  // Human hunters / vehicles — respect era gating (jeep/airboat only in industrial+)
   if (rng.chance(0.012 * dt)) {
     const hunterCount = wildlife.filter(w => ['hunter_boat', 'hunter_foot', 'jeep', 'airboat'].includes(w.type)).length;
     if (hunterCount < 3) {
-      const type = rng.pick(['hunter_boat', 'hunter_foot', 'hunter_foot', 'jeep', 'airboat']);
+      const hunterPool = currentEraId >= 2
+        ? ['hunter_boat', 'hunter_foot', 'hunter_foot', 'jeep', 'airboat']
+        : ['hunter_boat', 'hunter_foot', 'hunter_foot'];
+      const type = rng.pick(hunterPool);
       wildlife.push(spawnWildlife(rng, type, simTime, waterY));
     }
   }
@@ -522,6 +537,7 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
 
               if (gator.health <= 0) {
                 // VAPORIZED — gator disintegrates
+                if (obituaryState) logDeath(obituaryState, { gator, cause: 'alien', time: simTime });
                 world.kill(gid);
                 // Green vaporization flash
                 for (let v = 0; v < 8; v++) {
@@ -628,7 +644,10 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
                 target.gator.health -= 0.4;
                 spawnDeathParticles(particles, target.tr.x + 5, target.tr.y + 3);
                 w.muzzleFlash = 0.15; // gun flash
-                if (target.gator.health <= 0) world.kill(target.id);
+                if (target.gator.health <= 0) {
+                  if (obituaryState) logDeath(obituaryState, { gator: target.gator, cause: 'hunter', time: simTime });
+                  world.kill(target.id);
+                }
                 w.vx *= -1;
               }
             } else {
@@ -691,6 +710,7 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
             spawnDeathParticles(particles, tr.x + (gator.spriteW || 10) / 2, tr.y, '#33ff33');
             if (gator.health <= 0) {
               // VAPORIZED
+              if (obituaryState) logDeath(obituaryState, { gator, cause: 'alien', time: simTime });
               world.kill(id);
               for (let v = 0; v < 10; v++) {
                 particles.deathParticles.push({

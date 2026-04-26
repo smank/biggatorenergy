@@ -111,6 +111,8 @@
         <button type="button" class="title-back" data-action="back">back</button>
       </div>
 
+      <button type="button" class="title-vault-link" id="title-vault-btn">vault</button>
+
       <div class="title-footer">biggatorenergy.com</div>
     </div>
   </div>
@@ -135,17 +137,52 @@
         <button type="button" class="bge-btn bge-btn-small" id="game-over-terrarium">watch the swamp</button>
         <button type="button" class="bge-btn bge-btn-small bge-btn-primary" id="game-over-restart">new dynasty</button>
       </div>
+      <button type="button" class="bge-vault-link" id="game-over-vault-btn">vault</button>
     </div>
   </div>
+  <div id="unlocks-shop" class="bge-overlay hidden" role="dialog" aria-labelledby="unlocks-shop-title" aria-modal="true">
+    <div class="bge-card unlocks-card">
+      <h2 id="unlocks-shop-title">vault</h2>
+      <div class="unlocks-balance" id="unlocks-balance">0 lineage points</div>
+      <div class="unlocks-list" id="unlocks-list"></div>
+      <div class="unlocks-feedback" id="unlocks-feedback"></div>
+      <button type="button" class="bge-vault-link" id="unlocks-close">close</button>
+    </div>
+  </div>
+
+  <div id="inspector-overlay" class="bge-overlay hidden" role="dialog" aria-labelledby="inspector-card" aria-modal="true">
+    <div class="bge-card inspector-card" id="inspector-card">
+      <!-- populated by inspector.js -->
+    </div>
+  </div>
+
+  <div id="era-celebration" class="era-celebration hidden" role="status" aria-live="polite">
+    <div class="era-cel-flavor"></div>
+    <div class="era-cel-name"></div>
+  </div>
+
+  <!-- Obituary toggle button + side panel -->
+  <button type="button" id="obituary-toggle" aria-label="Toggle obituary log" aria-expanded="false" aria-controls="obituary-panel">log</button>
+  <aside id="obituary-panel" class="hidden" role="complementary" aria-label="Obituary log">
+    <div class="obit-header">obituary</div>
+    <div id="obituary-list" class="obit-list"></div>
+  </aside>
+
   <div id="rotate-prompt" role="alert">
     <div id="rotate-icon" aria-hidden="true">&#8635;</div>
     <div id="rotate-text">rotate your device</div>
   </div>
+
+  <div id="sim-controls" aria-label="simulation controls">
+    <button type="button" id="sim-pause-btn" aria-label="pause or resume simulation">pause</button>
+    <button type="button" id="sim-speed-btn" aria-label="cycle simulation speed">1x</button>
+  </div>
+
   <noscript>
     <p style="color:#6a8a5a;font-family:monospace;padding:1em;">
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260420-1"></script>
+  <script type="module" src="js/main.js?v=20260426-tier1"></script>
 </body>
 </html>

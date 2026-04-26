@@ -8,16 +8,19 @@ import { physicsSystem } from './systems/physics.js';
 import { lifecycleSystem } from './systems/lifecycle.js';
 import { breedingSystem, inheritTraits } from './systems/breeding.js';
 import { predatorSystem, scarePredators } from './systems/predator.js';
-import { createEnvironment, environmentSystem, renderCelestial, renderEnvironmentEffects, getSeasonText } from './systems/environment.js';
-import { drawSprite, drawPixelText, renderSky, renderRainbow, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI } from './systems/render.js';
-import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS } from './input.js';
+import { createEnvironment, environmentSystem, renderCelestial, renderEnvironmentEffects, getSeasonText, maybeInjectAcidRain } from './systems/environment.js';
+import { drawSprite, drawPixelText, renderSky, renderRainbow, renderTerrain, renderWater, renderVegetation, renderGators, renderPrey, renderUnderwaterLife, renderSkyLife, renderUI, renderSmokestacks } from './systems/render.js';
+import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS, getSpeedMultiplier, isPaused, getSpeedLabel, togglePause, cycleSpeed } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
 import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch, playGatorStare, playEggHatch } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
-import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints } from './game/dynasty.js';
+import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints, updateEraClock, renderEraHUD, initEraDynasty, getCurrentEra, ERA_FLAVOR } from './game/dynasty.js';
+import { initInspector, openInspectorAt, closeInspector } from './systems/inspector.js';
+import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls } from './game/unlocks.js';
+import { loadObituary, updateMoments, renderMoments, renderObituaryPanel } from './game/obituary.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -227,7 +230,7 @@ function updateVegGrowth(dt) {
     winter: -0.001,
   };
   const rate = seasonGrowthRate[env.season] || 0;
-  const weatherMod = env.weather === 'rain' ? 1.3 : env.weather === 'storm' ? 0.9 : env.weather === 'clear' ? 0.8 : 1.0;
+  const weatherMod = env.weather === 'rain' ? 1.3 : env.weather === 'storm' ? 0.9 : env.weather === 'clear' ? 0.8 : env.weather === 'acid_rain' ? 0.6 : 1.0;
   const fireDamage = fireState.fires.length * -0.003;
 
   // Tiny baseline growth — the swamp inches forward
@@ -487,13 +490,18 @@ let simTime = 0;
 const fireState = createFireState();
 const wildlifeState = createWildlifeState();
 const particles = createParticleState();
+const obituaryState = loadObituary();
 
 // --- Mode + Dynasty state (set by load or by mode-picker overlay) ---
 let gameMode = MODE_TERRARIUM; // default for fresh/terrarium starts
-let dynasty = null;            // { id, name, foundedAt, founderNames } when in dynasty mode
+let dynasty = null;            // { id, name, foundedAt, founderNames, era, eraClock, gensBonusReached } when in dynasty mode
 let lineagePoints = loadLineagePoints();
 let dynastyFounderIds = [];    // ids of founders, tracked for extinction check
 let extinctionGraceTimer = 0;  // don't trigger game-over during the first few seconds of a new dynasty
+
+// --- Era Celebration state ---
+let pendingEraCelebration = null; // { era, timer } — set when an era advance fires
+let eraCelebrationTimer = 0;
 
 // --- Load Saved State or Fresh Start ---
 const savedState = persistence.load();
@@ -898,6 +906,16 @@ createInputHandler(canvas, {
   onPower: activatePower,
   onScare: triggerScare,
   onMove: (x, y) => { cursorX = x; cursorY = y; },
+  isSimStarted: () => simulationStarted,
+});
+
+// --- Gator Inspector ---
+initInspector({ canvas, world, GATOR_STAGES });
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
+  if (isGodMode()) return; // god mode clicks are for powers, not inspection
+  if (gameOver) return;    // let the game-over handler own this
+  openInspectorAt(e.clientX, e.clientY);
 });
 
 // --- Predator Rendering ---
@@ -938,7 +956,7 @@ function renderFullUI(ctx, simTime) {
     drawPixelText(ctx, epochLabel, CANVAS_W - epochLabel.length * 4 - 2, 3);
   }
 
-  // Dynasty HUD — top-center bloodline status
+  // Dynasty HUD — top-center bloodline status + era HUD
   if (gameMode === MODE_DYNASTY && dynasty) {
     const aliveCount = countLivingBloodline(world, dynasty.id);
     const label = `${dynasty.name}`.toLowerCase();
@@ -948,6 +966,17 @@ function renderFullUI(ctx, simTime) {
     const sub = `gen:${maxGeneration}  blood:${aliveCount}`;
     ctx.fillStyle = aliveCount <= 2 ? '#aa5a5a' : '#4a6a4a';
     drawPixelText(ctx, sub, Math.floor(CANVAS_W / 2 - sub.length * 2), 9);
+    // Era HUD — small, top-right, below epoch label row
+    renderEraHUD(ctx, dynasty, drawPixelText, CANVAS_W, CANVAS_H);
+  }
+
+  // Speed / pause indicator — bottom-right, above ticker
+  {
+    const label = getSpeedLabel();
+    const isP = isPaused();
+    const isNonDefault = !isP && label !== '1x';
+    ctx.fillStyle = isP ? '#cca050' : isNonDefault ? '#aa6a4a' : '#3a4a3a';
+    drawPixelText(ctx, label, CANVAS_W - label.length * 4 - 2, CANVAS_H - 13);
   }
 
   // Mute indicator
@@ -987,6 +1016,72 @@ function renderFullUI(ctx, simTime) {
   }
 }
 
+// --- Paused frame render ---
+// Renders the current scene state without advancing simulation, then overlays a
+// semi-transparent dim + "paused" pixel text. Called each frame when paused.
+function renderPausedFrame(ctx, simTime) {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const frameVegRng = createRNG(rng._seed + 999);
+
+  renderSky(ctx, waterY, simTime, env);
+  renderCelestial(ctx, env, waterY, simTime);
+  renderRainbow(ctx, vegState, waterY);
+  renderSkyLife(ctx, waterY, simTime, frameVegRng);
+  renderTerrain(ctx, terrain, waterY);
+
+  // Gator drag marks
+  for (const track of tracks) {
+    ctx.globalAlpha = Math.max(0, 1 - track.age / 20);
+    ctx.fillStyle = '#3a3a2a';
+    ctx.fillRect(Math.floor(track.x), Math.floor(track.y), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  renderWater(ctx, waterY, simTime);
+  renderTheDeep(ctx, deepState, waterY, simTime);
+  renderUnderwaterLife(ctx, waterY, simTime, frameVegRng);
+  renderVegetation(ctx, terrain, waterY, frameVegRng, simTime, vegState, env);
+  renderSkulls(ctx, skulls, simTime);
+  renderPrey(ctx, world, simTime, 0);
+  renderGators(ctx, world, simTime);
+  renderPredators(ctx, world);
+  renderRipples(ctx, particles, 0);
+  renderWildlife(ctx, wildlifeState, simTime);
+  renderAmbientParticles(ctx, particles, simTime);
+  renderDeathParticles(ctx, particles);
+
+  // Flying debris
+  for (const d of vegState.flyingDebris) {
+    const px = Math.floor(d.x);
+    const py = Math.floor(d.y);
+    ctx.fillStyle = d.color;
+    const cos = Math.cos(d.rot);
+    const sin = Math.sin(d.rot);
+    for (let dx = 0; dx < d.size; dx++) {
+      for (let dy = 0; dy < Math.max(1, d.size - 1); dy++) {
+        const rx = Math.floor(px + dx * cos - dy * sin);
+        const ry = Math.floor(py + dx * sin + dy * cos);
+        ctx.fillRect(rx, ry, 1, 1);
+      }
+    }
+  }
+  renderFires(ctx, fireState, simTime);
+  renderEvents(ctx, events, simTime, waterY);
+  renderEnvironmentEffects(ctx, env, waterY, simTime);
+  renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
+
+  renderFullUI(ctx, simTime);
+
+  // Pause overlay — slight dim + centered text
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const pauseMsg = 'paused  ·  press space';
+  ctx.fillStyle = '#cca050';
+  drawPixelText(ctx, pauseMsg, Math.floor(CANVAS_W / 2 - pauseMsg.length * 2), Math.floor(CANVAS_H / 2 - 3));
+}
+
 // --- The Deep rendering ---
 function renderTheDeep(ctx, deepState, waterY, simTime) {
   if (!deepState.shadowActive) return;
@@ -1021,6 +1116,16 @@ function renderTheDeep(ctx, deepState, waterY, simTime) {
 window.addEventListener('beforeunload', () => {
   persistence.save(world, env, simTime, maxGeneration, vegState, { mode: gameMode, dynasty });
 });
+
+// --- Era Celebration click-to-dismiss ---
+const eraCelebrationEl = document.getElementById('era-celebration');
+if (eraCelebrationEl) {
+  eraCelebrationEl.addEventListener('click', () => {
+    pendingEraCelebration = null;
+    eraCelebrationTimer = 0;
+    eraCelebrationEl.classList.add('hidden');
+  });
+}
 
 // --- Title backdrop ---
 // One-time static frame painted behind the title screen. Renders the stage
@@ -1224,19 +1329,19 @@ function startTerrariumFresh() {
 }
 
 function rollFounderCandidate(sex) {
-  const colors = randomGatorColors(rng);
-  return {
-    sex,
-    name: randomGatorName(rng, sex),
-    traits: {
-      speed: rng.float(0.7, 1.3),
-      maxSize: rng.float(0.8, 1.2),
-      aggression: rng.float(0.2, 0.8),
-      fertility: rng.float(0.3, 0.7),
-      metabolism: rng.float(0.7, 1.3),
-      ...colors,
-    },
+  const baseColors = randomGatorColors(rng);
+  const overrideColors = applyUnlocksToFounderColors(rng);
+  const colors = overrideColors || baseColors;
+  const traits = {
+    speed: rng.float(0.7, 1.3),
+    maxSize: rng.float(0.8, 1.2),
+    aggression: rng.float(0.2, 0.8),
+    fertility: rng.float(0.3, 0.7),
+    metabolism: rng.float(0.7, 1.3),
+    ...colors,
   };
+  applyUnlocksToFounderRoll(traits);
+  return { sex, name: randomGatorName(rng, sex), traits };
 }
 
 function describeTrait(t) {
@@ -1300,7 +1405,7 @@ function showFoundingPair() {
   pendingFounders = {
     dynastyId: 'dyn_' + rng.range(1e6, 9e6).toString(36),
     name: randomDynastyName(rng),
-    rerollsLeft: MAX_REROLLS,
+    rerollsLeft: getMaxRerolls(MAX_REROLLS),
     male: rollFounderCandidate('male'),
     female: rollFounderCandidate('female'),
   };
@@ -1394,6 +1499,139 @@ if (gameOverRestart) gameOverRestart.onclick = resetToFreshDynasty;
 const gameOverTerrarium = document.getElementById('game-over-terrarium');
 if (gameOverTerrarium) gameOverTerrarium.onclick = resetToTerrarium;
 
+// --- Obituary Panel ---
+const obituaryPanel = document.getElementById('obituary-panel');
+const obituaryToggle = document.getElementById('obituary-toggle');
+if (obituaryToggle && obituaryPanel) {
+  obituaryToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const nowOpen = obituaryPanel.classList.toggle('hidden');
+    // classList.toggle returns true when class was ADDED (so panel is now hidden)
+    const isOpen = !nowOpen;
+    obituaryToggle.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen) renderObituaryPanel(obituaryState);
+  });
+}
+// Close when clicking outside the panel
+document.addEventListener('click', (e) => {
+  if (!obituaryPanel || !obituaryToggle) return;
+  if (!obituaryPanel.classList.contains('hidden') &&
+      !obituaryPanel.contains(e.target) && e.target !== obituaryToggle) {
+    obituaryPanel.classList.add('hidden');
+    obituaryToggle.setAttribute('aria-expanded', 'false');
+  }
+});
+
+// --- Unlocks Shop ---
+let shopReturnOverlay = null;
+
+function openUnlocksShop(returnTo) {
+  shopReturnOverlay = returnTo || null;
+  renderUnlocksShop();
+  const shopEl = document.getElementById('unlocks-shop');
+  if (shopEl) shopEl.classList.remove('hidden');
+}
+
+function closeUnlocksShop() {
+  const shopEl = document.getElementById('unlocks-shop');
+  if (shopEl) shopEl.classList.add('hidden');
+  shopReturnOverlay = null;
+}
+
+function renderUnlocksShop() {
+  const balanceEl = document.getElementById('unlocks-balance');
+  const listEl = document.getElementById('unlocks-list');
+  const feedbackEl = document.getElementById('unlocks-feedback');
+  if (!listEl) return;
+  if (balanceEl) balanceEl.textContent = `${lineagePoints} lineage point${lineagePoints === 1 ? '' : 's'}`;
+  if (feedbackEl) feedbackEl.textContent = '';
+
+  const owned = loadPurchasedUnlocks();
+  const allOwned = UNLOCKS.every(u => owned.has(u.id));
+  listEl.innerHTML = '';
+
+  if (allOwned) {
+    const empty = document.createElement('div');
+    empty.className = 'unlock-row';
+    empty.style.cssText = 'color:#4a6a4a;font-size:10px;letter-spacing:2px;';
+    empty.textContent = 'nothing more for sale';
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (const unlock of UNLOCKS) {
+    const isOwned = owned.has(unlock.id);
+    const canAfford = lineagePoints >= unlock.cost;
+    const row = document.createElement('div');
+    row.className = 'unlock-row ' + (isOwned ? 'owned' : canAfford ? 'affordable' : 'unaffordable');
+    row.dataset.id = unlock.id;
+
+    const text = document.createElement('div');
+    text.className = 'unlock-text';
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'unlock-name';
+    nameDiv.textContent = unlock.name;
+    const descDiv = document.createElement('div');
+    descDiv.className = 'unlock-desc';
+    descDiv.textContent = unlock.description;
+    text.appendChild(nameDiv);
+    text.appendChild(descDiv);
+
+    const right = document.createElement('div');
+    right.className = 'unlock-right';
+
+    if (isOwned) {
+      const badge = document.createElement('span');
+      badge.className = 'unlock-owned-badge';
+      badge.textContent = 'kept';
+      right.appendChild(badge);
+    } else {
+      const cost = document.createElement('span');
+      cost.className = 'unlock-cost';
+      cost.textContent = `${unlock.cost} lp`;
+      right.appendChild(cost);
+      if (canAfford) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'unlock-buy-btn';
+        btn.textContent = 'keep';
+        btn.dataset.buyId = unlock.id;
+        right.appendChild(btn);
+      }
+    }
+
+    row.appendChild(text);
+    row.appendChild(right);
+    listEl.appendChild(row);
+  }
+}
+
+const shopOverlayEl = document.getElementById('unlocks-shop');
+if (shopOverlayEl) {
+  shopOverlayEl.addEventListener('click', (e) => {
+    if (e.target.closest('#unlocks-close')) { closeUnlocksShop(); return; }
+    const buyBtn = e.target.closest('[data-buy-id]');
+    if (buyBtn) {
+      const result = purchase(buyBtn.dataset.buyId, lineagePoints);
+      const feedbackEl = document.getElementById('unlocks-feedback');
+      if (result.ok) {
+        lineagePoints = result.newPoints;
+        saveLineagePoints(lineagePoints);
+        const row = shopOverlayEl.querySelector(`[data-id="${buyBtn.dataset.buyId}"]`);
+        if (row) { row.classList.add('flash'); row.addEventListener('animationend', () => row.classList.remove('flash'), { once: true }); }
+        renderUnlocksShop();
+      } else {
+        if (feedbackEl) feedbackEl.textContent = result.error || 'not enough';
+      }
+    }
+  });
+}
+
+const titleVaultBtn = document.getElementById('title-vault-btn');
+if (titleVaultBtn) titleVaultBtn.onclick = () => openUnlocksShop('title');
+const gameOverVaultBtn = document.getElementById('game-over-vault-btn');
+if (gameOverVaultBtn) gameOverVaultBtn.onclick = () => openUnlocksShop('game-over');
+
 // Boot flow:
 // 1. If a "new run" intent was stashed by the title screen (via reload), honor it.
 // 2. Otherwise, always show the title screen — even for existing saves, so the user
@@ -1442,13 +1680,42 @@ function gameLoop(timestamp) {
   let dt = (timestamp - lastTime) / 1000;
   if (dt > MAX_DT) dt = MAX_DT;
   lastTime = timestamp;
+
+  // Apply speed multiplier (0 when paused)
+  const speedMult = getSpeedMultiplier();
+  dt *= speedMult;
+
   simTime += dt;
 
   // Orientation poll — catches rotations in browsers that fire no events
   checkOrientation();
 
+  // Skip all simulation when paused — fall through to render below
+  if (speedMult === 0) {
+    renderPausedFrame(ctx, simTime);
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   // Environment
   environmentSystem(env, dt, rng);
+
+  // Era system — tick era clock in dynasty mode; inject acid rain in industrial+
+  if (gameMode === MODE_DYNASTY && dynasty) {
+    initEraDynasty(dynasty);
+    const eraCallbacks = {
+      onAdvance({ era }) {
+        pendingEraCelebration = { era, timer: 4 };
+        eraCelebrationTimer = 4;
+      },
+      onLineagePointBonus(amount) {
+        lineagePoints += amount;
+        saveLineagePoints(lineagePoints);
+      },
+    };
+    updateEraClock(dynasty, dt, maxGeneration, rng, eraCallbacks);
+    if (dynasty.era >= 2) maybeInjectAcidRain(env, rng);
+  }
 
   // Food spawning (affected by environment)
   foodSpawnTimer -= dt;
@@ -1461,14 +1728,15 @@ function gameLoop(timestamp) {
   // Systems
   preySystem(world, dt, simTime, rng);
   aiSystem(world, dt, rng, waterY);
-  breedingSystem(world, dt, rng, waterY, spawnGatorFromParents);
-  lifecycleSystem(world, dt, rng);
-  predatorSystem(world, dt, rng, waterY, simTime);
+  breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState);
+  lifecycleSystem(world, dt, rng, obituaryState, simTime);
+  predatorSystem(world, dt, rng, waterY, simTime, obituaryState);
   physicsSystem(world, dt, terrain, waterY, rng);
   updateAmbientParticles(particles, dt, simTime, rng, env, waterY);
   updateGatorRipples(particles, world, dt, rng, waterY);
-  updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat });
-  updateEvents(events, world, dt, rng, waterY, simTime, env);
+  const currentEraId = (gameMode === MODE_DYNASTY && dynasty) ? (dynasty.era || 1) : 1;
+  updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat, obituaryState }, currentEraId);
+  updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState);
   updateFires(fireState, dt, rng, wildlifeState.wildlife, world, env, waterY);
 
   // Update flying tree debris
@@ -1509,6 +1777,7 @@ function gameLoop(timestamp) {
   // Audio hooks for events
   if (events.ufo) { setUFO(true); } else { setUFO(false); }
   updateDeathParticles(particles, dt);
+  updateMoments(obituaryState, dt);
 
   // Hurricane pushes everything + expose wind to renderer
   env._hurricaneWind = events.hurricane ? events.hurricane.windSpeed : 0;
@@ -1643,6 +1912,8 @@ function gameLoop(timestamp) {
   renderSky(ctx, waterY, simTime, env);
   renderCelestial(ctx, env, waterY, simTime);
   renderRainbow(ctx, vegState, waterY);
+  // Industrial era: distant smokestacks behind terrain
+  if (currentEraId >= 2) renderSmokestacks(ctx, waterY, simTime, rng._seed);
   renderSkyLife(ctx, waterY, simTime, frameVegRng);
   renderTerrain(ctx, terrain, waterY);
 
@@ -1701,7 +1972,39 @@ function gameLoop(timestamp) {
     }
   }
 
+  renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
   renderFullUI(ctx, simTime);
+
+  // Era transition celebration overlay
+  if (pendingEraCelebration) {
+    eraCelebrationTimer -= dt;
+    if (eraCelebrationTimer <= 0) {
+      pendingEraCelebration = null;
+      eraCelebrationTimer = 0;
+    } else {
+      // Dawn light fade-in then hold
+      const fadeAlpha = eraCelebrationTimer > 3.5
+        ? (4 - eraCelebrationTimer) / 0.5   // fade in over 0.5s
+        : Math.min(1, eraCelebrationTimer / 0.8); // fade out over final 0.8s
+      const cel = pendingEraCelebration;
+      const el = document.getElementById('era-celebration');
+      if (el) {
+        if (!el.dataset.era || el.dataset.era !== String(cel.era.id)) {
+          el.dataset.era = String(cel.era.id);
+          const nameEl = el.querySelector('.era-cel-name');
+          const flavorEl = el.querySelector('.era-cel-flavor');
+          if (nameEl) nameEl.textContent = cel.era.name;
+          if (flavorEl) flavorEl.textContent = ERA_FLAVOR[cel.era.id] || `the ${cel.era.name} era begins.`;
+        }
+        el.style.opacity = String(Math.max(0, Math.min(1, fadeAlpha)));
+        el.classList.remove('hidden');
+      }
+    }
+    if (!pendingEraCelebration) {
+      const el = document.getElementById('era-celebration');
+      if (el) el.classList.add('hidden');
+    }
+  }
 
   // GAME OVER screen
   if (gameOver) {
@@ -1767,5 +2070,33 @@ canvas.addEventListener('pointerup', (e) => {
     }
   }
 });
+
+// --- Mobile sim controls ---
+// Show pause + speed buttons only on touch devices
+if (isTouchDevice) {
+  const simControls = document.getElementById('sim-controls');
+  const pauseBtn = document.getElementById('sim-pause-btn');
+  const speedBtn = document.getElementById('sim-speed-btn');
+
+  if (simControls && pauseBtn && speedBtn) {
+    simControls.classList.add('touch-visible');
+
+    pauseBtn.addEventListener('click', () => {
+      if (!simulationStarted) return;
+      togglePause();
+      pauseBtn.textContent = isPaused() ? '\u25b6' : 'pause';
+      pauseBtn.classList.toggle('is-paused', isPaused());
+    });
+
+    speedBtn.addEventListener('click', () => {
+      if (!simulationStarted) return;
+      cycleSpeed(1);
+      speedBtn.textContent = getSpeedLabel();
+      // cycleSpeed unpauses — sync pause button
+      pauseBtn.textContent = isPaused() ? '\u25b6' : 'pause';
+      pauseBtn.classList.toggle('is-paused', isPaused());
+    });
+  }
+}
 
 requestAnimationFrame(gameLoop);

@@ -12,6 +12,20 @@ export const POWER_COLORS = ['#dddd44', '#4488dd', '#dd4444', '#ffffff', '#44dd4
 let currentPower = 0;
 let godMode = false;
 
+// --- Pause + Speed ---
+let speedIdx = 1; // 0=0.5x, 1=1x, 2=2x, 3=4x
+const SPEEDS = [0.5, 1, 2, 4];
+let paused = false;
+
+export function getSpeedMultiplier() { return paused ? 0 : SPEEDS[speedIdx]; }
+export function isPaused() { return paused; }
+export function getSpeedLabel() { return paused ? 'paused' : SPEEDS[speedIdx] + 'x'; }
+export function togglePause() { paused = !paused; }
+export function cycleSpeed(dir) {
+  speedIdx = (speedIdx + dir + SPEEDS.length) % SPEEDS.length;
+  if (paused) paused = false; // any speed change unpauses
+}
+
 export function getCurrentPower() {
   return currentPower;
 }
@@ -61,6 +75,29 @@ export function createInputHandler(canvas, callbacks) {
 
   // Keyboard
   window.addEventListener('keydown', (e) => {
+    // Don't intercept if user is typing in an input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Space toggles pause (only when sim is running — callbacks.isSimStarted check
+    // happens in main.js by ignoring the exported state when !simulationStarted)
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (callbacks.isSimStarted && callbacks.isSimStarted()) togglePause();
+      return;
+    }
+
+    // [ / ] cycle speed
+    if (e.key === '[') {
+      e.preventDefault();
+      if (callbacks.isSimStarted && callbacks.isSimStarted()) cycleSpeed(-1);
+      return;
+    }
+    if (e.key === ']') {
+      e.preventDefault();
+      if (callbacks.isSimStarted && callbacks.isSimStarted()) cycleSpeed(1);
+      return;
+    }
+
     // G toggles god mode
     if (e.key === 'g' || e.key === 'G') {
       godMode = !godMode;

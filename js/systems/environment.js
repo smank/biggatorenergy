@@ -14,7 +14,7 @@ const SEASON_CONFIGS = {
   winter: { foodMult: 0.3, breedingMult: 0.0, skyTint: [-10, -5, 5], landHue: '#5a6a5a' },
 };
 
-const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'storm'];
+const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'storm', 'acid_rain'];
 
 export function createEnvironment() {
   return {
@@ -31,6 +31,15 @@ export function createEnvironment() {
     stars: [],
     satellites: [],
   };
+}
+
+// Call this after the regular environmentSystem tick when in Industrial+ era.
+// Small chance to flip weather to acid_rain instead of regular rain.
+export function maybeInjectAcidRain(env, rng) {
+  if (env.weather === 'rain' && rng.chance(0.015)) {
+    env.weather = 'acid_rain';
+    env.rainIntensity = Math.max(env.rainIntensity, 0.4);
+  }
 }
 
 export function environmentSystem(env, dt, rng) {
@@ -63,7 +72,7 @@ export function environmentSystem(env, dt, rng) {
     }
     env.weatherTimer = rng.float(10, 30); // faster cycling
 
-    if (env.weather === 'rain') {
+    if (env.weather === 'rain' || env.weather === 'acid_rain') {
       env.rainIntensity = rng.float(0.3, 0.7);
     } else if (env.weather === 'storm') {
       env.rainIntensity = rng.float(0.7, 1.0);
@@ -359,11 +368,16 @@ export function renderEnvironmentEffects(ctx, env, waterY, simTime) {
     }
   }
 
-  // Rain
+  // Rain (acid_rain uses a sickly yellow-green tint)
   if (env.rainIntensity > 0) {
-    ctx.fillStyle = '#8899bb';
+    ctx.fillStyle = env.weather === 'acid_rain' ? '#99bb44' : '#8899bb';
     for (const drop of env.rainDrops) {
       ctx.fillRect(Math.floor(drop.x), Math.floor(drop.y), 1, 2);
+    }
+    // Acid rain: faint green screen tint
+    if (env.weather === 'acid_rain') {
+      ctx.fillStyle = 'rgba(80, 120, 20, 0.06)';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
   }
 

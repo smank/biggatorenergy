@@ -3,12 +3,13 @@
 import { CANVAS_W, CANVAS_H } from '../config.js';
 import { HERON_1 } from '../sprites/fauna-sprites.js';
 import { distance } from '../utils/math.js';
+import { logDeath, addMoment } from '../game/obituary.js';
 
 const HERON_SPAWN_INTERVAL = 30; // seconds between potential spawns
 const HERON_SPEED = 18;
 const SWOOP_SPEED = 30;
 
-export function predatorSystem(world, dt, rng, waterY, simTime) {
+export function predatorSystem(world, dt, rng, waterY, simTime, obituaryState) {
   // Count babies for spawn scaling
   let babyCount = 0;
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
@@ -96,6 +97,10 @@ export function predatorSystem(world, dt, rng, waterY, simTime) {
 
         // Catch!
         if (dist < 6) {
+          if (obituaryState) {
+            const baby = world.get(pred.targetId, 'gator');
+            logDeath(obituaryState, { gator: baby, cause: 'heron', time: simTime });
+          }
           world.kill(pred.targetId); // baby eaten
           pred.state = 'fleeing';
           pred.swoopTimer = 0;

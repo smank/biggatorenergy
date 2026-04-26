@@ -122,6 +122,50 @@ body.show-rotate #start-overlay {
   display: none;
 }
 
+/* --- Mobile sim controls (pause + speed) --- */
+/* Hidden by default; JS adds .touch-visible when isTouchDevice is true */
+#sim-controls {
+  display: none;
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  right: 8px;
+  z-index: 5;
+  gap: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+#sim-controls.touch-visible {
+  display: flex;
+}
+
+#sim-controls button {
+  appearance: none;
+  background: rgba(10, 18, 14, 0.82);
+  border: 1px solid #2a4a2e;
+  color: #b8d4a8;
+  font-family: monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: lowercase;
+  padding: 7px 10px;
+  cursor: pointer;
+  min-width: 46px;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#sim-controls button:active {
+  background: rgba(26, 42, 30, 0.9);
+  border-color: #4a6a4e;
+}
+
+#sim-controls #sim-pause-btn.is-paused {
+  color: #cca050;
+  border-color: #6a5030;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
@@ -541,3 +585,438 @@ body.show-rotate #start-overlay {
 }
 #game-over-stats .bge-label { color: #6a8a5a; }
 #game-over-stats .bge-value { color: #cce0b8; }
+
+/* --- Inspector overlay --- */
+#inspector-overlay {
+  /* Inherits .bge-overlay — just tweak z-index to sit above other overlays */
+  z-index: 16;
+  /* Clicking the backdrop closes the card */
+  cursor: default;
+}
+
+.inspector-card {
+  max-width: 320px;
+  gap: 10px;
+  cursor: default;
+}
+
+.inspector-name {
+  font-size: 18px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #cce0b8;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.inspector-byline {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #8aaa78;
+  text-transform: lowercase;
+}
+
+.inspector-origin {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #4a6a4a;
+  text-transform: lowercase;
+}
+
+.inspector-traits {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #8aca6a;
+  text-transform: lowercase;
+  margin-top: 2px;
+}
+
+.inspector-stats {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6a8a5a;
+  text-transform: lowercase;
+  line-height: 1.6;
+  margin-top: 2px;
+}
+
+.inspector-rename {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 6px;
+}
+
+.inspector-rename-input {
+  flex: 1;
+  background: #0f1812;
+  border: 1px solid #2a4a2e;
+  color: #cce0b8;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 6px 8px;
+  letter-spacing: 1px;
+  text-transform: lowercase;
+  min-width: 0;
+}
+.inspector-rename-input:focus {
+  outline: none;
+  border-color: #6aaa5a;
+}
+.inspector-rename-input::placeholder {
+  color: #3a5a3a;
+}
+
+.inspector-save-btn {
+  appearance: none;
+  background: #2a4a2e;
+  border: 1px solid #6aaa5a;
+  color: #eeffdd;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: lowercase;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.inspector-save-btn:hover,
+.inspector-save-btn:focus-visible {
+  background: #3a5a3e;
+  outline: none;
+}
+
+.inspector-close-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #4a6a4a;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: lowercase;
+  cursor: pointer;
+  padding: 4px 0;
+  align-self: flex-end;
+  margin-top: 4px;
+}
+.inspector-close-btn:hover {
+  color: #8aca6a;
+}
+
+/* --- Unlocks shop --- */
+
+.unlocks-card {
+  max-width: 420px;
+  gap: 12px;
+}
+
+.unlocks-balance {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #6aaa5a;
+  text-transform: lowercase;
+}
+
+.unlocks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #2a4a2e;
+}
+
+.unlock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #1e3020;
+  font-size: 12px;
+  letter-spacing: 1px;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+}
+.unlock-row:last-child {
+  border-bottom: none;
+}
+
+/* owned */
+.unlock-row.owned {
+  color: #4a6a4a;
+}
+/* affordable */
+.unlock-row.affordable {
+  color: #cce0b8;
+}
+/* unaffordable */
+.unlock-row.unaffordable {
+  opacity: 0.4;
+  color: #cce0b8;
+}
+
+.unlock-text {
+  flex: 1;
+  min-width: 0;
+}
+.unlock-name {
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: lowercase;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unlock-desc {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #4a6a4a;
+  text-transform: lowercase;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.owned .unlock-desc {
+  color: #3a5a3a;
+}
+
+.unlock-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.unlock-owned-badge {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #4a6a4a;
+  text-transform: lowercase;
+}
+.unlock-cost {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #6aaa5a;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+.unlock-buy-btn {
+  appearance: none;
+  background: #2a4a2e;
+  border: 1px solid #6aaa5a;
+  color: #eeffdd;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: lowercase;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+.unlock-buy-btn:hover,
+.unlock-buy-btn:focus-visible {
+  background: #3a5a3e;
+  outline: none;
+}
+.unlock-buy-btn:active {
+  transform: translateY(1px);
+}
+
+/* flash animation on purchase */
+@keyframes unlock-flash {
+  0%   { background: #5a9a5a; }
+  100% { background: transparent; }
+}
+.unlock-row.flash {
+  animation: unlock-flash 0.35s ease-out forwards;
+}
+
+.unlocks-feedback {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #6aaa5a;
+  text-transform: lowercase;
+  min-height: 14px;
+}
+
+/* vault link — subtle text button used in title + game-over + shop close */
+.bge-vault-link {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #4a6a4a;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: lowercase;
+  cursor: pointer;
+  padding: 6px 0;
+  align-self: center;
+  margin-top: 4px;
+}
+.bge-vault-link:hover {
+  color: #8aca6a;
+}
+
+/* title-screen vault link — sits below the mode menus */
+.title-vault-link {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #3a5a3a;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: lowercase;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: -12px;
+}
+.title-vault-link:hover {
+  color: #6aaa5a;
+}
+
+/* --- Era Transition Celebration Overlay --- */
+.era-celebration {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(5, 10, 5, 0.72);
+  z-index: 17;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}
+.era-celebration.hidden {
+  display: none;
+}
+
+.era-cel-flavor {
+  font-size: clamp(9px, 1.4vw, 12px);
+  letter-spacing: 0.18em;
+  color: #7aaa6a;
+  text-transform: lowercase;
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.6;
+  opacity: 0.85;
+  padding: 0 24px;
+}
+
+.era-cel-name {
+  font-size: clamp(18px, 5vw, 36px);
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  color: #cce0b8;
+  text-transform: lowercase;
+  text-shadow: 0 0 24px rgba(160, 220, 140, 0.25), 3px 3px 0 #0a0a12;
+  line-height: 1;
+}
+
+/* --- Obituary toggle button --- */
+#obituary-toggle {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  z-index: 12;
+  appearance: none;
+  background: rgba(10, 15, 10, 0.85);
+  border: 1px solid #2a3a2a;
+  color: #4a6a4a;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: lowercase;
+  padding: 5px 7px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  pointer-events: auto;
+}
+#obituary-toggle:hover,
+#obituary-toggle:focus-visible,
+#obituary-toggle[aria-expanded="true"] {
+  color: #8aca6a;
+  border-color: #4a6a4a;
+  background: rgba(20, 30, 20, 0.92);
+  outline: none;
+}
+
+/* --- Obituary side panel --- */
+#obituary-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 85vw);
+  z-index: 11;
+  background: rgba(8, 12, 8, 0.96);
+  border-left: 1px solid #1e2e1e;
+  display: flex;
+  flex-direction: column;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  color: #8aaa78;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#obituary-panel.hidden {
+  display: none;
+}
+
+.obit-header {
+  font-size: 9px;
+  letter-spacing: 0.35em;
+  color: #4a6a4a;
+  text-transform: lowercase;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #1e2e1e;
+  flex-shrink: 0;
+}
+
+.obit-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.obit-entry {
+  padding: 8px 16px 7px;
+  border-bottom: 1px solid #141e14;
+}
+.obit-entry:last-child {
+  border-bottom: none;
+}
+
+.obit-name {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #b8d4a8;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+.obit-detail {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: #4a6a4a;
+  text-transform: lowercase;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.obit-empty {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #2a3a2a;
+  text-transform: lowercase;
+  padding: 24px 16px;
+  text-align: center;
+}

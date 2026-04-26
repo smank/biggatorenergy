@@ -1,6 +1,7 @@
 // Lifecycle system — aging through stages, hunger/energy drain, natural death
 
 import { GATOR_STAGES } from '../sprites/gator-sprites.js';
+import { logDeath } from '../game/obituary.js';
 
 // Stage durations in sim-seconds (at real-time, 1 sim-second = 1 real second)
 const STAGE_DURATIONS = {
@@ -13,7 +14,7 @@ const STAGE_DURATIONS = {
 
 const STAGE_ORDER = ['egg', 'hatchling', 'juvenile', 'adult', 'elder'];
 
-export function lifecycleSystem(world, dt, rng) {
+export function lifecycleSystem(world, dt, rng, obituaryState, simTime) {
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
     // Age
     gator.age += dt;
@@ -58,6 +59,7 @@ export function lifecycleSystem(world, dt, rng) {
     if (gator.hunger >= 1.0) {
       gator.health -= dt * 0.1;
       if (gator.health <= 0) {
+        if (obituaryState) logDeath(obituaryState, { gator, cause: 'starvation', time: simTime });
         world.kill(id);
         continue;
       }
@@ -67,6 +69,7 @@ export function lifecycleSystem(world, dt, rng) {
     if (gator.stage === 'elder') {
       const deathChance = (gator.age / (STAGE_DURATIONS.elder * (gator.traits?.maxSize || 1))) * 0.01;
       if (rng.chance(deathChance * dt)) {
+        if (obituaryState) logDeath(obituaryState, { gator, cause: 'old age', time: simTime });
         world.kill(id);
         continue;
       }
