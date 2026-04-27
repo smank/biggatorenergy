@@ -18,9 +18,12 @@ import { createFireState, startFire, updateFires, renderFires } from './game/fir
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
 import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints, updateEraClock, renderEraHUD, initEraDynasty, getCurrentEra, ERA_FLAVOR } from './game/dynasty.js';
-import { initInspector, openInspectorAt, closeInspector } from './systems/inspector.js';
+import { initInspector, openInspectorAt, openInspectorForGator, closeInspector } from './systems/inspector.js';
 import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls } from './game/unlocks.js';
 import { loadObituary, updateMoments, renderMoments, renderObituaryPanel } from './game/obituary.js';
+import { attachLineage } from './game/dynasty.js';
+import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
+import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife } from './systems/playerControl.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -424,7 +427,13 @@ function spawnGator(rng, stage = 'adult', opts = {}) {
     name: opts.name,
     lineageId: opts.lineageId,
     founder: !!opts.founder,
+    isPlayer: !!opts.isPlayer,
   };
+
+  // Attach lineage component for founders (no parents)
+  if (opts.lineageId) {
+    gatorComp.lineage = { dynastyId: opts.lineageId, motherId: null, fatherId: null };
+  }
 
   // Golden gator — 1-in-100 chance
   if (rng.chance(0.01)) {
@@ -442,7 +451,7 @@ function spawnGator(rng, stage = 'adult', opts = {}) {
 // --- Spawn Gator from Parents ---
 let maxGeneration = 0;
 
-function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen, lineageId) {
+function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen, lineageId, motherId, fatherId) {
   const stageData = GATOR_STAGES['egg'];
   const id = world.create();
   const traits = inheritTraits(motherTraits, fatherTraits, rng);
@@ -467,6 +476,11 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen, 
     name: lineageId ? randomGatorName(rng, sex) : undefined,
     lineageId: lineageId || undefined,
   };
+
+  // Attach lineage component with parent ids
+  if (lineageId) {
+    gatorComp.lineage = { dynastyId: lineageId, motherId: motherId || null, fatherId: fatherId || null };
+  }
 
   // Golden gator — 1-in-100 chance
   if (rng.chance(0.01)) {
@@ -911,11 +925,67 @@ createInputHandler(canvas, {
 
 // --- Gator Inspector ---
 initInspector({ canvas, world, GATOR_STAGES });
+
+// --- Player Control system init (wired later in commitFounders when dynasty is set) ---
+initPlayerControl({
+  canvas, world, dynasty: null,
+  playSplash, addRipple, particles, spawnDeathParticles,
+  waterY, wildlifeState,
+});
+
+// Pointer hold tracking
+let _pointerDown = false;
+let _pointerClientX = 0;
+let _pointerClientY = 0;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  _pointerDown = true;
+  _pointerClientX = e.clientX;
+  _pointerClientY = e.clientY;
+});
+canvas.addEventListener('pointercancel', () => { _pointerDown = false; });
+canvas.addEventListener('pointerleave', () => { _pointerDown = false; });
+
 canvas.addEventListener('pointerup', (e) => {
+  _pointerDown = false;
   if (e.button !== 0) return;
   if (isGodMode()) return; // god mode clicks are for powers, not inspection
   if (gameOver) return;    // let the game-over handler own this
+
+  const isShiftHeld = e.shiftKey;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top) * scaleY;
+
+  // In dynasty mode, try player control dispatch first.
+  // Shift-click or no player gator = fall through to inspector.
+  if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId && !isShiftHeld) {
+    const consumed = dispatchClick(cx, cy, false);
+    if (consumed) return;
+  }
+
+  // Inspector handles clicks on all gators (shift-click in dynasty = always inspect)
   openInspectorAt(e.clientX, e.clientY);
+});
+
+// I key: inspect the player's own gator
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'i' || e.key === 'I') {
+    if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId) {
+      const tr = world.get(dynasty.playerGatorId, 'transform');
+      if (tr) {
+        const rect = canvas.getBoundingClientRect();
+        // Convert logical coords back to client coords for inspector
+        const scaleX = rect.width / canvas.width;
+        const scaleY = rect.height / canvas.height;
+        const clientX = rect.left + tr.x * scaleX;
+        const clientY = rect.top + tr.y * scaleY;
+        openInspectorAt(clientX, clientY);
+      }
+    }
+  }
 });
 
 // --- Predator Rendering ---
@@ -1373,10 +1443,14 @@ function refreshFoundingPairUI() {
   if (!grid || !pendingFounders) return;
   if (rerollSpan) rerollSpan.textContent = String(pendingFounders.rerollsLeft);
   if (nameLabel) nameLabel.textContent = '— ' + pendingFounders.name + ' —';
+
+  // Default control selection to male (first card)
+  if (!pendingFounders.controlSex) pendingFounders.controlSex = 'male';
+
   grid.innerHTML = '';
   for (const founder of [pendingFounders.male, pendingFounders.female]) {
     const wrap = document.createElement('div');
-    wrap.className = 'bge-founder';
+    wrap.className = 'bge-founder' + (pendingFounders.controlSex === founder.sex ? ' bge-founder-controlled' : '');
     const canvasEl = document.createElement('canvas');
     canvasEl.className = 'bge-founder-preview';
     canvasEl.width = 28; canvasEl.height = 10;
@@ -1395,6 +1469,26 @@ function refreshFoundingPairUI() {
     trait.className = 'bge-founder-trait';
     trait.textContent = describeTrait(founder.traits);
     wrap.appendChild(trait);
+
+    // Control radio — "play as this one"
+    const controlLabel = document.createElement('label');
+    controlLabel.className = 'bge-founder-control-label';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'founder-control';
+    radio.value = founder.sex;
+    radio.checked = pendingFounders.controlSex === founder.sex;
+    radio.onchange = () => {
+      pendingFounders.controlSex = founder.sex;
+      // Refresh control highlight on both cards
+      const cards = grid.querySelectorAll('.bge-founder');
+      cards.forEach(c => c.classList.remove('bge-founder-controlled'));
+      wrap.classList.add('bge-founder-controlled');
+    };
+    controlLabel.appendChild(radio);
+    controlLabel.appendChild(document.createTextNode('play as this one'));
+    wrap.appendChild(controlLabel);
+
     grid.appendChild(wrap);
     renderFounderPreview(canvasEl, founder.sex, founder.traits);
   }
@@ -1438,22 +1532,177 @@ function commitFounders() {
     foundedAt: Date.now(),
     founderNames: [p.male.name, p.female.name],
     eraReached: 0,
+    playerGatorId: null,
   };
   extinctionGraceTimer = 30; // 30s of grace so a stray event doesn't end it frame 1
   dynastyFounderIds = [];
+
+  const controlSex = p.controlSex || 'male';
+
   const maleId = spawnGator(rng, 'adult', {
     x: CANVAS_W * 0.4, y: waterY - 3,
     sex: 'male', traits: p.male.traits,
     name: p.male.name, lineageId: p.dynastyId, founder: true,
+    isPlayer: controlSex === 'male',
   });
   const femaleId = spawnGator(rng, 'adult', {
     x: CANVAS_W * 0.55, y: waterY - 3,
     sex: 'female', traits: p.female.traits,
     name: p.female.name, lineageId: p.dynastyId, founder: true,
+    isPlayer: controlSex === 'female',
   });
   dynastyFounderIds.push(maleId, femaleId);
+  dynasty.playerGatorId = controlSex === 'male' ? maleId : femaleId;
+
+  // Wire player control system
+  setPlayerControlDynasty(dynasty);
+  setPlayerControlWildlife(wildlifeState);
+
   pendingFounders = null;
   simulationStarted = true;
+  // Show the family-tree HUD button now that we're in dynasty mode
+  if (familyTreeToggle) familyTreeToggle.classList.remove('hidden');
+}
+
+// --- Family tree + succession ---
+const familyTreeToggle = document.getElementById('family-tree-toggle');
+const familyTreeOverlay = document.getElementById('family-tree-overlay');
+const familyTreeBody = document.getElementById('family-tree-body');
+const familyTreeStats = document.getElementById('family-tree-stats');
+const familyTreeClose = document.getElementById('family-tree-close');
+let familyTreeMode = 'browse'; // 'browse' | 'succession'
+
+function renderTreeNode(node, mode) {
+  const wrap = document.createElement('div');
+  wrap.className = 'family-tree-node';
+  if (!node.alive) wrap.classList.add('is-dead');
+  if (node.gator?.isPlayer) wrap.classList.add('is-player');
+
+  const name = document.createElement('div');
+  name.className = 'family-tree-name';
+  name.textContent = node.name;
+  wrap.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.className = 'family-tree-meta';
+  const sexGlyph = node.sex === 'female' ? '♀' : (node.sex === 'male' ? '♂' : '·');
+  if (node.alive && node.gator) {
+    const days = Math.floor((node.gator.age || 0) / 60);
+    meta.textContent = `${sexGlyph} ${node.gator.stage} · ${days}d`;
+  } else if (node.obitEntry) {
+    const days = Math.floor((node.obitEntry.age || 0) / 60);
+    meta.textContent = `${sexGlyph} died · ${days}d · ${node.obitEntry.cause || 'unknown'}`;
+  } else {
+    meta.textContent = `${sexGlyph} ${node.alive ? 'alive' : 'gone'}`;
+  }
+  wrap.appendChild(meta);
+
+  if (mode === 'succession' && node.alive && node.gator?.stage !== 'egg') {
+    const becomeBtn = document.createElement('button');
+    becomeBtn.type = 'button';
+    becomeBtn.className = 'family-tree-become-btn';
+    becomeBtn.textContent = 'become';
+    becomeBtn.onclick = (e) => {
+      e.stopPropagation();
+      pickHeir(node.id);
+    };
+    wrap.appendChild(becomeBtn);
+  } else if (mode === 'browse') {
+    wrap.onclick = () => {
+      // Open inspector for the node's gator if alive
+      if (node.alive && node.gator) {
+        closeFamilyTree();
+        openInspectorForGator(node.gator);
+      }
+    };
+  }
+
+  return wrap;
+}
+
+function showFamilyTree(mode = 'browse') {
+  if (!familyTreeOverlay || !familyTreeBody || !dynasty) return;
+  familyTreeMode = mode;
+  const obit = obituaryState?.entries || [];
+  const tree = buildTree(world, obit, dynasty.id);
+
+  let alive = 0, dead = 0;
+  for (const gen of tree) for (const n of gen) (n.alive ? alive++ : dead++);
+  if (familyTreeStats) {
+    familyTreeStats.textContent = `${alive} alive · ${dead} gone · gen ${maxGeneration}`;
+  }
+
+  familyTreeBody.innerHTML = '';
+  if (mode === 'succession') {
+    const banner = document.createElement('div');
+    banner.className = 'family-tree-mode-label';
+    banner.textContent = 'the bloodline goes on. choose your heir.';
+    familyTreeBody.appendChild(banner);
+  }
+
+  if (tree.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'family-tree-empty';
+    empty.textContent = 'no record yet';
+    familyTreeBody.appendChild(empty);
+  } else {
+    tree.forEach((gen, i) => {
+      const genWrap = document.createElement('div');
+      genWrap.className = 'family-tree-gen';
+      const genLabel = document.createElement('div');
+      genLabel.className = 'family-tree-gen-label';
+      genLabel.textContent = i === 0 ? 'founders' : `generation ${i}`;
+      genWrap.appendChild(genLabel);
+      const row = document.createElement('div');
+      row.className = 'family-tree-row';
+      gen.sort((a, b) => (b.alive ? 1 : 0) - (a.alive ? 1 : 0));
+      for (const node of gen) row.appendChild(renderTreeNode(node, mode));
+      genWrap.appendChild(row);
+      familyTreeBody.appendChild(genWrap);
+    });
+  }
+
+  familyTreeOverlay.classList.remove('hidden');
+}
+
+function closeFamilyTree() {
+  familyTreeOverlay?.classList.add('hidden');
+  familyTreeMode = 'browse';
+}
+
+function pickHeir(newPlayerId) {
+  setPlayerGator(world, newPlayerId, dynasty);
+  setPlayerControlDynasty(dynasty);
+  closeFamilyTree();
+}
+
+function showSuccessionModal(successors) {
+  // The succession modal IS the family tree, filtered to living members.
+  // buildTree already includes all alive bloodline; we just open it in succession mode.
+  showFamilyTree('succession');
+}
+
+if (familyTreeToggle) familyTreeToggle.onclick = () => showFamilyTree('browse');
+if (familyTreeClose) familyTreeClose.onclick = () => {
+  if (familyTreeMode === 'succession') return; // can't dismiss succession without picking
+  closeFamilyTree();
+};
+familyTreeOverlay?.addEventListener('click', (e) => {
+  if (e.target === familyTreeOverlay && familyTreeMode === 'browse') closeFamilyTree();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && familyTreeMode === 'browse') closeFamilyTree();
+  if (e.key === 't' || e.key === 'T') {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (gameMode === MODE_DYNASTY && dynasty && simulationStarted && familyTreeOverlay?.classList.contains('hidden')) {
+      showFamilyTree('browse');
+    }
+  }
+});
+
+// On boot for an already-loaded dynasty save, expose the family tree button
+if (gameMode === MODE_DYNASTY && dynasty && familyTreeToggle) {
+  familyTreeToggle.classList.remove('hidden');
 }
 
 function showDynastyGameOver() {
@@ -1878,6 +2127,20 @@ function gameLoop(timestamp) {
       if (tr && gator && gator.stage !== 'egg') {
         addSkull(tr.x + (gator.spriteW || 10) / 2 - 1, tr.y + (gator.spriteH || 5) - 2);
       }
+    }
+  }
+
+  // Player gator death check — detect when the player-controlled gator has died
+  if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId && !dynastyExtinct) {
+    const pgGator = world.get(dynasty.playerGatorId, 'gator');
+    if (!pgGator) {
+      // Player gator is gone — try to find a successor
+      dynasty.playerGatorId = null;
+      const successors = getLivingSuccessors(world, dynasty.id);
+      if (successors.length > 0) {
+        showSuccessionModal(successors);
+      }
+      // If no successors, extinction check below will handle it
     }
   }
 

@@ -168,6 +168,19 @@
     <div id="obituary-list" class="obit-list"></div>
   </aside>
 
+  <!-- Family tree toggle + overlay (dynasty mode only) -->
+  <button type="button" id="family-tree-toggle" class="hidden" aria-label="Open family tree" aria-controls="family-tree-overlay">family</button>
+  <div id="family-tree-overlay" class="bge-overlay hidden" role="dialog" aria-labelledby="family-tree-title" aria-modal="true">
+    <div class="bge-card family-tree-card">
+      <div class="family-tree-header">
+        <h2 id="family-tree-title">family</h2>
+        <div id="family-tree-stats"></div>
+      </div>
+      <div id="family-tree-body" class="family-tree-body"></div>
+      <button type="button" class="bge-btn bge-btn-small" id="family-tree-close">close</button>
+    </div>
+  </div>
+
   <div id="rotate-prompt" role="alert">
     <div id="rotate-icon" aria-hidden="true">&#8635;</div>
     <div id="rotate-text">rotate your device</div>
@@ -183,6 +196,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260426-names"></script>
+  <script type="module" src="js/main.js?v=20260426-control"></script>
 </body>
 </html>

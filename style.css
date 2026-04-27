@@ -1020,3 +1020,176 @@ body.show-rotate #start-overlay {
   padding: 24px 16px;
   text-align: center;
 }
+
+/* --- Founding pair control radio --- */
+.bge-founder-control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: #6a8a5a;
+  text-transform: lowercase;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.bge-founder-control-label input[type="radio"] {
+  accent-color: #8aca6a;
+  cursor: pointer;
+}
+.bge-founder.bge-founder-controlled {
+  border-color: #8aca6a;
+  box-shadow: 0 0 0 1px #8aca6a inset;
+}
+.bge-founder.bge-founder-controlled .bge-founder-control-label {
+  color: #cce0b8;
+}
+
+/* --- Family tree button (HUD) --- */
+#family-tree-toggle {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 8px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  left: 8px;
+  z-index: 9;
+  background: rgba(15, 24, 18, 0.85);
+  border: 1px solid #2a4a2e;
+  color: #6a8a5a;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: lowercase;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+#family-tree-toggle.hidden { display: none; }
+#family-tree-toggle:hover, #family-tree-toggle:focus-visible {
+  background: rgba(42, 74, 46, 0.9);
+  border-color: #6aaa5a;
+  color: #cce0b8;
+  outline: none;
+}
+
+/* --- Family tree overlay --- */
+.family-tree-card {
+  max-width: 720px;
+  width: 100%;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+.family-tree-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  border-bottom: 1px solid #2a4a2e;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+.family-tree-header h2 {
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: #8aca6a;
+  text-transform: lowercase;
+  font-weight: 700;
+}
+#family-tree-stats {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: #4a6a4a;
+  text-transform: lowercase;
+}
+.family-tree-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.family-tree-mode-label {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: #cca050;
+  text-transform: lowercase;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.family-tree-empty {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #3a4a3a;
+  text-transform: lowercase;
+  text-align: center;
+  padding: 24px;
+}
+.family-tree-gen {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.family-tree-gen-label {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: #4a6a4a;
+  text-transform: lowercase;
+}
+.family-tree-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.family-tree-node {
+  background: #0a120e;
+  border: 1px solid #2a4a2e;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 80px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.family-tree-node:hover {
+  background: #1a2a1e;
+  border-color: #6aaa5a;
+}
+.family-tree-node.is-dead {
+  opacity: 0.5;
+}
+.family-tree-node.is-player {
+  border-color: #8aca6a;
+  box-shadow: 0 0 0 1px #8aca6a inset, 0 0 8px rgba(138, 202, 106, 0.3);
+}
+.family-tree-name {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: #cce0b8;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.3;
+}
+.family-tree-meta {
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  color: #4a6a4a;
+  text-transform: lowercase;
+}
+.family-tree-become-btn {
+  appearance: none;
+  background: #2a4a2e;
+  border: 1px solid #6aaa5a;
+  color: #eeffdd;
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  padding: 3px 6px;
+  margin-top: 2px;
+  cursor: pointer;
+}
+.family-tree-become-btn:hover {
+  background: #3a5a3e;
+}

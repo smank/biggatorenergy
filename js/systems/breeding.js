@@ -103,7 +103,9 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
           const mate = world.get(gator.matePartner, 'gator');
           gator.mateTraits = mate?.traits || null;
           // Track the male's lineage so offspring inherit either parent's bloodline.
-          gator.mateLineageId = mate?.lineageId || null;
+          gator.mateLineageId = mate?.lineageId || mate?.lineage?.dynastyId || null;
+          // Store father id for lineage component on offspring
+          gator.matePartnerId = gator.matePartner;
         }
         gator.state = 'idle';
         gator.stateTimer = rng.float(3, 8);
@@ -123,6 +125,7 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
         gator.isPregnant = false;
         const clutchSize = Math.floor((gator.traits?.fertility || 0.5) * 4) + rng.range(1, 3);
 
+        const nestLineageId = gator.lineage?.dynastyId || gator.lineageId || gator.mateLineageId || null;
         gator.nest = {
           x: tr.x,
           y: waterY - 2,
@@ -132,7 +135,10 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
           mateTraits: gator.mateTraits,
           generation: gator.generation,
           // Pass lineage from either parent — either parent carrying it is enough.
-          lineageId: gator.lineageId || gator.mateLineageId || null,
+          lineageId: nestLineageId,
+          // Mother and father ids for lineage component on offspring
+          motherId: id,
+          fatherId: gator.matePartnerId || null,
         };
         gator.state = 'guarding';
         gator.stateTimer = 10;
@@ -149,7 +155,9 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
           nest.parentTraits,
           nest.mateTraits,
           nest.generation,
-          nest.lineageId
+          nest.lineageId,
+          nest.motherId,
+          nest.fatherId
         );
       }
       // Notable moment for named mothers
@@ -166,6 +174,7 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
       gator.nestHatchReady = false;
       gator.mateTraits = null;
       gator.mateLineageId = null;
+      gator.matePartnerId = null;
     }
 
     // Fighting — males in close proximity with high aggression

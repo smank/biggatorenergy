@@ -858,6 +858,22 @@ export function renderGators(ctx, world, simTime) {
     const drawX = Math.floor(tr.x);
     const drawY = Math.floor(tr.y + (gator.breatheOffset || 0)) + (gator.slipping ? 1 : 0);
 
+    // Player aura — pulsing green ring drawn BELOW the sprite
+    if (gator.isPlayer) {
+      const alpha = 0.3 + Math.sin(Date.now() * 0.005) * 0.15;
+      ctx.fillStyle = `rgba(120, 200, 100, ${alpha})`;
+      const spriteW = (gator.spriteW || 10) * scale;
+      const spriteH = (gator.spriteH || 5) * scale;
+      // Draw 1px border ring around the gator bounding box
+      ctx.fillRect(drawX - 1, drawY - 1, spriteW + 2, 1); // top
+      ctx.fillRect(drawX - 1, drawY + spriteH, spriteW + 2, 1); // bottom
+      ctx.fillRect(drawX - 1, drawY, 1, spriteH); // left
+      ctx.fillRect(drawX + spriteW, drawY, 1, spriteH); // right
+      // Faint inner fill for extra presence
+      ctx.fillStyle = `rgba(120, 200, 100, ${alpha * 0.25})`;
+      ctx.fillRect(drawX, drawY, spriteW, spriteH);
+    }
+
     if (scale > 1.05) {
       drawScaledSprite(ctx, sprite, drawX, drawY, tr.direction === -1, tints, scale);
     } else {

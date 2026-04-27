@@ -151,6 +151,17 @@ function buildCard(gator) {
   }
 }
 
+export function openInspectorForGator(gator) {
+  if (!_overlay || !_card || !gator) return;
+  buildCard(gator);
+  _overlay.classList.remove('hidden');
+  // Focus the rename input after a tick so it's in the DOM
+  setTimeout(() => {
+    const input = document.getElementById('inspector-rename-input');
+    if (input) input.focus();
+  }, 0);
+}
+
 export function openInspectorAt(clientX, clientY) {
   if (!_canvas || !_world || !_overlay || !_card) return;
 

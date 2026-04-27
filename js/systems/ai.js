@@ -53,6 +53,120 @@ export function aiSystem(world, dt, rng, waterY) {
       transition(gator, 'idle', rng);
     }
 
+    // --- Player-controlled gator: execute playerOverride, skip random AI ---
+    if (gator.isPlayer && gator.playerOverride) {
+      const ov = gator.playerOverride;
+
+      // Run animation timers regardless
+      gator.blinkTimer = (gator.blinkTimer || 0) - dt;
+      if (gator.blinkTimer <= 0) {
+        if (gator.frame === 'blink') { gator.frame = 'idle'; gator.blinkTimer = rng.float(3, 8); }
+        else { gator.frame = 'blink'; gator.blinkTimer = 0.15; }
+      }
+      gator.breatheTimer = (gator.breatheTimer || 0) - dt;
+      if (gator.breatheTimer <= 0) {
+        gator.breatheOffset = gator.breatheOffset === 0 ? 1 : 0;
+        gator.breatheTimer = gator.breatheOffset === 0 ? rng.float(6, 12) : 0.5;
+      }
+
+      if (ov.action === 'moveTo') {
+        const dx = ov.x - (tr.x + (gator.spriteW || 10) / 2);
+        const dy = ov.y - tr.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 3) {
+          const speed = (gator.traits?.speed || 1) * 10;
+          tr.vx = (dx / dist) * speed;
+          tr.vy = (dy / dist) * speed * 0.3;
+          tr.direction = dx > 0 ? 1 : -1;
+          if (gator.inWater) gator.frame = 'swim';
+        } else {
+          tr.vx *= 0.85;
+          tr.vy *= 0.85;
+          gator.playerOverride = null; // arrived
+          gator.state = 'idle';
+          gator.stateTimer = rng.float(1, 3);
+        }
+      } else if (ov.action === 'hunt') {
+        const ptr = world.get(ov.targetId, 'transform');
+        const pp = world.get(ov.targetId, 'prey');
+        if (!ptr || !pp || !pp.alive) {
+          gator.playerOverride = null;
+          gator.state = 'idle';
+          gator.stateTimer = rng.float(1, 3);
+        } else {
+          const dx = ptr.x - tr.x;
+          const dy = ptr.y - tr.y;
+          const dist = distance(tr.x, tr.y, ptr.x, ptr.y);
+          const speed = (gator.traits?.speed || 1) * 15;
+          if (dist > 1) {
+            tr.vx = (dx / dist) * speed;
+            tr.vy = (dy / dist) * speed * 0.5;
+            tr.direction = dx > 0 ? 1 : -1;
+          }
+          if (gator.inWater) gator.frame = 'swim';
+          const sizeScale = gator.sizeScale || 1;
+          const eatRange = (gator.spriteW || 20) * 0.4 * sizeScale;
+          if (dist < eatRange) {
+            tr.direction = dx > 0 ? 1 : -1;
+            pp.alive = false;
+            world.kill(ov.targetId);
+            gator.frame = 'eat';
+            gator.hunger = Math.max(0, gator.hunger - (pp.value || 0.15));
+            gator.mealCount = (gator.mealCount || 0) + 1;
+            const maxS = (gator.traits?.maxSize || 1) * 2.0;
+            gator.sizeScale = Math.min(maxS, 1 + gator.mealCount * 0.02);
+            gator.playerOverride = null;
+            gator.state = 'eating';
+            gator.stateTimer = 0.4;
+          }
+        }
+      }
+      // fight and court states are handled by the breeding system already
+      // so we just fall through and let breeding system manage those states
+
+      // Hunger/energy drain still applies to player gator
+      gator.hunger = Math.min(1, gator.hunger + dt * 0.015 * (gator.traits?.metabolism || 1));
+      if (gator.state !== 'sleeping') {
+        const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
+        gator.energy = Math.max(0, gator.energy - dt * activityDrain);
+      }
+      continue; // skip normal AI for player gator
+    }
+
+    // For player gator with no override, let idle state run (shows life) but don't
+    // choose random wandering or hunger-driven targets
+    if (gator.isPlayer) {
+      gator.stateTimer -= dt;
+      gator.blinkTimer = (gator.blinkTimer || 0) - dt;
+      if (gator.blinkTimer <= 0) {
+        if (gator.frame === 'blink') { gator.frame = 'idle'; gator.blinkTimer = rng.float(3, 8); }
+        else if (gator.state !== 'eating') { gator.frame = 'blink'; gator.blinkTimer = 0.15; }
+        else { gator.blinkTimer = rng.float(3, 8); }
+      }
+      gator.breatheTimer = (gator.breatheTimer || 0) - dt;
+      if (gator.breatheTimer <= 0) {
+        gator.breatheOffset = gator.breatheOffset === 0 ? 1 : 0;
+        gator.breatheTimer = gator.breatheOffset === 0 ? rng.float(6, 12) : 0.5;
+      }
+      // Keep player gator loosely idle — slow to a stop if wandering state expired
+      if (gator.state === 'wandering' && gator.stateTimer <= 0) {
+        transition(gator, 'idle', rng);
+      }
+      if (gator.state === 'idle') {
+        tr.vx *= 0.9;
+      }
+      if (gator.state === 'eating' && gator.stateTimer <= 0) {
+        gator.frame = 'idle';
+        transition(gator, 'idle', rng);
+      }
+      gator.hunger = Math.min(1, gator.hunger + dt * 0.015 * (gator.traits?.metabolism || 1));
+      if (gator.state !== 'sleeping') {
+        const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
+        gator.energy = Math.max(0, gator.energy - dt * activityDrain);
+      }
+      continue;
+    }
+
     // States managed by breeding system — don't override
     const breedingManaged = ['courting', 'mating', 'fighting', 'fleeing'];
     if (breedingManaged.includes(gator.state)) {

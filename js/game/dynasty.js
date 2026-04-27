@@ -271,16 +271,25 @@ export function randomDynastyName(rng) {
   return rng.pick(roots) + ' ' + rng.pick(suffixes);
 }
 
-// A gator belongs to the bloodline if it has a lineageId matching the dynasty.
+// A gator belongs to the bloodline if it has a lineageId (or lineage.dynastyId) matching the dynasty.
 // Founders are marked explicitly; descendants inherit via breeding.
 export function isBloodline(gator, dynastyId) {
-  return gator && gator.lineageId === dynastyId;
+  if (!gator) return false;
+  if (gator.lineage?.dynastyId === dynastyId) return true;
+  return gator.lineageId === dynastyId;
+}
+
+// Attach the lineage component to a gator. Keeps lineageId in sync for compat.
+// motherId and fatherId are ECS entity ids (or null for founders).
+export function attachLineage(gator, dynastyId, motherId, fatherId) {
+  gator.lineage = { dynastyId, motherId: motherId || null, fatherId: fatherId || null };
+  gator.lineageId = dynastyId; // keep flat field in sync
 }
 
 export function countLivingBloodline(world, dynastyId) {
   let count = 0;
   for (const [, , gator] of world.query('transform', 'gator')) {
-    if (gator.lineageId === dynastyId) count++;
+    if (isBloodline(gator, dynastyId)) count++;
   }
   return count;
 }
@@ -288,7 +297,7 @@ export function countLivingBloodline(world, dynastyId) {
 export function findOldestBloodline(world, dynastyId) {
   let oldest = null;
   for (const [id, , gator] of world.query('transform', 'gator')) {
-    if (gator.lineageId !== dynastyId) continue;
+    if (!isBloodline(gator, dynastyId)) continue;
     if (!oldest || gator.age > oldest.age) oldest = { id, gator };
   }
   return oldest;
