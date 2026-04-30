@@ -590,6 +590,32 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
     updateVegGrowth(elapsed);
     vegState.age += elapsed;
   }
+
+  // Restore player-control on continued dynasty saves.
+  // Older saves (or saves where the previous player gator died offline) won't
+  // have dynasty.playerGatorId pointing at a living gator. Pick the eldest
+  // living bloodline non-egg as the player so the user can control immediately.
+  if (gameMode === MODE_DYNASTY && dynasty && dynasty.id) {
+    let stillAlive = false;
+    if (dynasty.playerGatorId) {
+      const g = world.get(dynasty.playerGatorId, 'gator');
+      if (g) { g.isPlayer = true; stillAlive = true; }
+    }
+    if (!stillAlive) {
+      // Find eldest living bloodline non-egg
+      let best = null;
+      for (const [id, , gator] of world.query('transform', 'gator')) {
+        const linId = gator.lineage?.dynastyId || gator.lineageId;
+        if (linId !== dynasty.id) continue;
+        if (gator.stage === 'egg') continue;
+        if (!best || (gator.age || 0) > (best.gator.age || 0)) best = { id, gator };
+      }
+      if (best) {
+        best.gator.isPlayer = true;
+        dynasty.playerGatorId = best.id;
+      }
+    }
+  }
 } else {
   // No save — show mode picker before spawning anything. The game loop can still
   // start running (rendering landscape + wildlife); gators come in after choice.
@@ -931,9 +957,10 @@ createInputHandler(canvas, {
   onScare: triggerScare,
   onMove: (x, y) => { cursorX = x; cursorY = y; },
   isSimStarted: () => simulationStarted,
-  // Dynasty mode with a controlled gator — clicks go to player control,
-  // never drop food. Hold G for god mode if you want to override.
-  isPlayerControlActive: () => gameMode === MODE_DYNASTY && !!dynasty?.playerGatorId,
+  // Dynasty mode never drops food on click — clicks belong to player control.
+  // (If no player gator is set, dispatchClick is a no-op and the click is
+  // simply ignored — better than spawning random fish.)
+  isPlayerControlActive: () => gameMode === MODE_DYNASTY,
 });
 
 // --- Gator Inspector ---
