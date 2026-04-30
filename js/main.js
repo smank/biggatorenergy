@@ -1,6 +1,6 @@
 import { createRNG, seedFromHash } from './rng.js';
 import { CANVAS_W, CANVAS_H, TICK_RATE, MAX_DT, WATER_LINE, FOOD_SPAWN_MIN, FOOD_SPAWN_MAX, MAX_FOOD } from './config.js';
-import { GATOR_STAGES } from './sprites/gator-sprites.js';
+import { GATOR_STAGES, TINT_COLORS } from './sprites/gator-sprites.js';
 import { FLY_1, FLY_2, FISH_SMALL_1, FISH_SMALL_2, FROG_1, FROG_2 } from './sprites/fauna-sprites.js';
 import { World } from './ecs.js';
 import { aiSystem } from './systems/ai.js';
@@ -23,7 +23,7 @@ import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, app
 import { loadObituary, updateMoments, renderMoments, renderObituaryPanel } from './game/obituary.js';
 import { attachLineage } from './game/dynasty.js';
 import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
-import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife } from './systems/playerControl.js';
+import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife, hoverState } from './systems/playerControl.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -516,6 +516,16 @@ let extinctionGraceTimer = 0;  // don't trigger game-over during the first few s
 // --- Era Celebration state ---
 let pendingEraCelebration = null; // { era, timer } — set when an era advance fires
 let eraCelebrationTimer = 0;
+
+// --- Death cutscene state ---
+let deathCutsceneActive = false;
+let deathCutscenePending = null; // { successors } to show after cutscene
+let deathCutsceneStartTime = 0; // performance.now() when cutscene began
+const DEATH_CUTSCENE_DURATION_MS = 3500; // 3.5s real time
+
+// --- Player HUD throttle ---
+let hudLastRefresh = 0;
+const HUD_REFRESH_MS = 100; // ~10fps for portrait, 10fps for stats
 
 // --- Load Saved State or Fresh Start ---
 const savedState = persistence.load();
@@ -1083,6 +1093,268 @@ function renderFullUI(ctx, simTime) {
     ctx.globalAlpha = pulse * 0.3;
     ctx.fillRect(cursorX - 2, cursorY - 2, 5, 5);
     ctx.globalAlpha = 1;
+  }
+}
+
+// --- Player HUD ---
+// HTML overlay card at bottom-center. Refreshed at ~10fps.
+
+const GATOR_STATE_LABELS = {
+  idle:      'idle',
+  wandering: 'swimming',
+  hunting:   'hunting',
+  eating:    'eating',
+  sleeping:  'sleeping',
+  courting:  'courting',
+  mating:    'mating',
+  nesting:   'nesting',
+  guarding:  'guarding',
+  fighting:  'fighting',
+  fleeing:   'fleeing',
+  dying:     'dying',
+};
+
+function getActionLabel(gator) {
+  const base = GATOR_STATE_LABELS[gator.state] || (gator.state || 'idle');
+  // Add target info when hunting or courting
+  if ((gator.state === 'hunting' || gator.state === 'eating') && gator.targetId) {
+    const prey = world.get(gator.targetId, 'prey');
+    if (prey?.type) return `${base} ${prey.type}`;
+    const tw = world.get(gator.targetId, 'gator');
+    if (tw?.name) return `${base} ${tw.name}`;
+  }
+  if (gator.state === 'courting' && gator.courtTarget) {
+    const cg = world.get(gator.courtTarget, 'gator');
+    if (cg?.name) return `courting ${cg.name}`;
+  }
+  if (gator.state === 'fighting' && gator.fightTarget) {
+    const fg = world.get(gator.fightTarget, 'gator');
+    if (fg?.name) return `fighting ${fg.name}`;
+  }
+  return base;
+}
+
+function updatePlayerHUD() {
+  if (gameMode !== MODE_DYNASTY || !dynasty || !dynasty.playerGatorId) {
+    const hudEl = document.getElementById('player-hud');
+    if (hudEl) hudEl.classList.add('hidden');
+    return;
+  }
+
+  const gator = world.get(dynasty.playerGatorId, 'gator');
+  const tr = world.get(dynasty.playerGatorId, 'transform');
+  if (!gator || !tr) {
+    const hudEl = document.getElementById('player-hud');
+    if (hudEl) hudEl.classList.add('hidden');
+    return;
+  }
+
+  const now = performance.now();
+  const hudEl = document.getElementById('player-hud');
+  if (!hudEl) return;
+  hudEl.classList.remove('hidden');
+
+  // Name
+  const nameEl = document.getElementById('player-hud-name');
+  if (nameEl) nameEl.textContent = (gator.name || 'gator').toLowerCase();
+
+  // Action
+  const actionEl = document.getElementById('player-hud-action');
+  if (actionEl) actionEl.textContent = getActionLabel(gator);
+
+  // Stat bars — hunger, energy, health (all 0.0–1.0)
+  // hunger: 0 = full (good), 1 = starving (bad) — bar shows how hungry they are
+  const hunger = Math.max(0, Math.min(1, gator.hunger || 0));
+  const hungerEl = document.getElementById('hud-bar-hunger');
+  if (hungerEl) {
+    hungerEl.style.width = `${Math.round(hunger * 100)}%`;
+    hungerEl.classList.toggle('critical', hunger > 0.65);
+  }
+  // energy: 1 = full, 0 = exhausted — bar shows remaining energy
+  const energy = Math.max(0, Math.min(1, gator.energy !== undefined ? gator.energy : 1));
+  const energyEl = document.getElementById('hud-bar-energy');
+  if (energyEl) energyEl.style.width = `${Math.round(energy * 100)}%`;
+
+  // health: 0.0–1.0
+  const health = Math.max(0, Math.min(1, gator.health !== undefined ? gator.health : 1));
+  const healthEl = document.getElementById('hud-bar-health');
+  if (healthEl) {
+    healthEl.style.width = `${Math.round(health * 100)}%`;
+    healthEl.classList.toggle('critical', health < 0.25);
+  }
+
+  // Portrait mini-canvas — refresh at ~10fps
+  if (now - hudLastRefresh > HUD_REFRESH_MS) {
+    hudLastRefresh = now;
+    const portrait = document.getElementById('player-portrait');
+    if (portrait) {
+      const pCtx = portrait.getContext('2d');
+      pCtx.imageSmoothingEnabled = false;
+      pCtx.clearRect(0, 0, portrait.width, portrait.height);
+      // Dark background
+      pCtx.fillStyle = '#0a120e';
+      pCtx.fillRect(0, 0, portrait.width, portrait.height);
+      // Draw gator sprite using existing drawSprite
+      const stageData = GATOR_STAGES[gator.stage];
+      if (stageData) {
+        const frameName = gator.frame || 'idle';
+        const sprite = stageData[frameName] || stageData.idle || stageData[Object.keys(stageData)[0]];
+        if (sprite) {
+          const sw = sprite[0].length;
+          const sh = sprite.length;
+          const tints = gator.traits || null;
+          // Scale to fit canvas — largest integer scale that doesn't overflow
+          const scaleX = Math.floor(portrait.width / sw);
+          const scaleY = Math.floor(portrait.height / sh);
+          const pxSize = Math.max(1, Math.min(scaleX, scaleY));
+          const ox2 = Math.floor((portrait.width - sw * pxSize) / 2);
+          const oy2 = Math.floor((portrait.height - sh * pxSize) / 2);
+          for (let py = 0; py < sh; py++) {
+            const row = sprite[py];
+            for (let px = 0; px < row.length; px++) {
+              let color = row[px];
+              if (!color) continue;
+              if (tints) {
+                if (color === TINT_COLORS.body && tints.body) color = tints.body;
+                else if (color === TINT_COLORS.belly && tints.belly) color = tints.belly;
+                else if (color === TINT_COLORS.dark && tints.dark) color = tints.dark;
+                else if (color === TINT_COLORS.scute && tints.scute) color = tints.scute;
+              }
+              pCtx.fillStyle = color;
+              const drawX = tr.direction === -1 ? ox2 + (row.length - 1 - px) * pxSize : ox2 + px * pxSize;
+              pCtx.fillRect(drawX, oy2 + py * pxSize, pxSize, pxSize);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// --- Hover tooltip ---
+function updateHoverTooltip() {
+  const tooltipEl = document.getElementById('hover-tooltip');
+  if (!tooltipEl) return;
+
+  if (gameMode !== MODE_DYNASTY || !dynasty || !dynasty.playerGatorId || !hoverState.kind || hoverState.kind === 'empty') {
+    tooltipEl.classList.add('hidden');
+    // Reset cursor to default
+    canvas.style.cursor = '';
+    return;
+  }
+
+  const { kind, name, clientX, clientY } = hoverState;
+
+  // Build tooltip text
+  let label = '';
+  let cursor = 'crosshair';
+  switch (kind) {
+    case 'self':
+      label = (name ? name : 'you') + ' · tail-slap';
+      cursor = 'cell';
+      break;
+    case 'mate':
+      label = (name ? name + ' · ' : '') + 'court';
+      cursor = 'copy';
+      break;
+    case 'rival':
+      label = (name ? name + ' · ' : '') + 'fight';
+      cursor = 'not-allowed';
+      break;
+    case 'gator':
+      label = (name ? name + ' · ' : '') + 'gator';
+      cursor = 'crosshair';
+      break;
+    case 'prey':
+      label = (name || 'prey') + ' · hunt';
+      cursor = 'crosshair';
+      break;
+    case 'wildlife':
+      label = (name || 'wildlife') + ' · scare';
+      cursor = 'crosshair';
+      break;
+    default:
+      tooltipEl.classList.add('hidden');
+      canvas.style.cursor = '';
+      return;
+  }
+
+  tooltipEl.textContent = label;
+  tooltipEl.classList.remove('hidden');
+  canvas.style.cursor = cursor;
+
+  // Position near cursor, offset so it doesn't obscure the target
+  const offset = 14;
+  let tx = clientX + offset;
+  let ty = clientY - offset;
+  // Keep inside viewport
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const tw = tooltipEl.offsetWidth || 80;
+  const th = tooltipEl.offsetHeight || 20;
+  if (tx + tw > vw - 8) tx = clientX - tw - offset;
+  if (ty < 8) ty = clientY + offset;
+  if (ty + th > vh - 8) ty = vh - th - 8;
+  tooltipEl.style.left = `${tx}px`;
+  tooltipEl.style.top = `${ty}px`;
+}
+
+// --- Death cutscene ---
+
+const DEATH_POEMS = {
+  'old age':  'the swamp goes quiet.',
+  'heron':    'the heron took them. it always does.',
+  'lightning':'a bright moment, then nothing.',
+  'fire':     'they were warmed before they were gone.',
+  'tornado':  'the wind has them now.',
+  'hunter':   'a man with a gun.',
+  'alien':    'stars. then static.',
+  'ufo':      'stars. then static.',
+  'starvation': 'hunger is patient.',
+  'fight':    'the swamp does not mourn the fallen.',
+};
+
+function deathCausePoem(cause) {
+  return DEATH_POEMS[cause] || 'the swamp continues.';
+}
+
+function showDeathCutscene(gator, cause, successors) {
+  deathCutsceneActive = true;
+  deathCutscenePending = successors;
+  deathCutsceneStartTime = performance.now();
+
+  const el = document.getElementById('death-cutscene');
+  if (!el) return;
+
+  const age = Math.floor((gator.age || 0) / 60);
+  document.getElementById('death-name').textContent = (gator.name || 'gator').toLowerCase();
+  document.getElementById('death-meta').textContent = `age ${age}d · died of ${cause || 'unknown'}`;
+  document.getElementById('death-poem').textContent = deathCausePoem(cause);
+
+  el.classList.remove('hidden');
+  // Trigger CSS fade: dim background after a tick
+  requestAnimationFrame(() => {
+    el.classList.add('active');
+    // Show text after 0.5s (background needs to fade in first)
+    setTimeout(() => el.classList.add('text-visible'), 500);
+  });
+}
+
+function tickDeathCutscene(_dt) {
+  if (!deathCutsceneActive) return;
+  const elapsed = performance.now() - deathCutsceneStartTime;
+  if (elapsed >= DEATH_CUTSCENE_DURATION_MS) {
+    // Done — hide cutscene and show succession
+    deathCutsceneActive = false;
+    const el = document.getElementById('death-cutscene');
+    if (el) {
+      el.classList.remove('active', 'text-visible');
+      el.classList.add('hidden');
+    }
+    if (deathCutscenePending && deathCutscenePending.length > 0) {
+      showSuccessionModal(deathCutscenePending);
+    }
+    deathCutscenePending = null;
   }
 }
 
@@ -2028,6 +2300,10 @@ function gameLoop(timestamp) {
   updateDeathParticles(particles, dt);
   updateMoments(obituaryState, dt);
 
+  // Player HUD + hover tooltip (HTML overlays)
+  updatePlayerHUD();
+  updateHoverTooltip();
+
   // Hurricane pushes everything + expose wind to renderer
   env._hurricaneWind = events.hurricane ? events.hurricane.windSpeed : 0;
   if (events.hurricane) {
@@ -2131,18 +2407,38 @@ function gameLoop(timestamp) {
   }
 
   // Player gator death check — detect when the player-controlled gator has died
-  if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId && !dynastyExtinct) {
+  if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId && !dynastyExtinct && !deathCutsceneActive) {
     const pgGator = world.get(dynasty.playerGatorId, 'gator');
     if (!pgGator) {
-      // Player gator is gone — try to find a successor
+      // Player gator is gone — find cause from obituary (most recent entry for this gator name)
+      const lastPgName = dynasty._lastPlayerGatorName || null;
+      let deathCause = 'unknown';
+      let deathGatorSnap = dynasty._lastPlayerGatorSnap || { name: lastPgName, age: 0 };
+      if (lastPgName && obituaryState?.entries) {
+        const entry = obituaryState.entries.find(e => e.name === lastPgName);
+        if (entry) {
+          deathCause = entry.cause || 'unknown';
+          deathGatorSnap = { name: entry.name, age: entry.age };
+        }
+      }
       dynasty.playerGatorId = null;
+      dynasty._lastPlayerGatorName = null;
+      dynasty._lastPlayerGatorSnap = null;
+
       const successors = getLivingSuccessors(world, dynasty.id);
       if (successors.length > 0) {
-        showSuccessionModal(successors);
+        showDeathCutscene(deathGatorSnap, deathCause, successors);
       }
       // If no successors, extinction check below will handle it
+    } else {
+      // Track current gator name/snapshot so we have it if they die next frame
+      dynasty._lastPlayerGatorName = pgGator.name || null;
+      dynasty._lastPlayerGatorSnap = { name: pgGator.name, age: pgGator.age || 0 };
     }
   }
+
+  // Tick death cutscene timer
+  tickDeathCutscene(dt);
 
   // Population check — behavior depends on mode.
   // Terrarium: classic "all gators dead" canvas game-over screen with respawn button.
@@ -2238,25 +2534,38 @@ function gameLoop(timestamp) {
   renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
   renderFullUI(ctx, simTime);
 
-  // Era transition celebration overlay
+  // Era transition celebration overlay — cinematic chapter card
   if (pendingEraCelebration) {
     eraCelebrationTimer -= dt;
     if (eraCelebrationTimer <= 0) {
       pendingEraCelebration = null;
       eraCelebrationTimer = 0;
     } else {
-      // Dawn light fade-in then hold
-      const fadeAlpha = eraCelebrationTimer > 3.5
-        ? (4 - eraCelebrationTimer) / 0.5   // fade in over 0.5s
-        : Math.min(1, eraCelebrationTimer / 0.8); // fade out over final 0.8s
+      // Fade in over 0.6s, hold, fade out over 0.5s
+      const total = 4.0;
+      const fadeInDur = 0.6;
+      const fadeOutDur = 0.5;
+      const elapsed = total - eraCelebrationTimer;
+      let fadeAlpha;
+      if (elapsed < fadeInDur) {
+        fadeAlpha = elapsed / fadeInDur;
+      } else if (eraCelebrationTimer < fadeOutDur) {
+        fadeAlpha = eraCelebrationTimer / fadeOutDur;
+      } else {
+        fadeAlpha = 1;
+      }
       const cel = pendingEraCelebration;
       const el = document.getElementById('era-celebration');
       if (el) {
         if (!el.dataset.era || el.dataset.era !== String(cel.era.id)) {
           el.dataset.era = String(cel.era.id);
+          const numeralEl = el.querySelector('.era-cel-numeral');
           const nameEl = el.querySelector('.era-cel-name');
           const flavorEl = el.querySelector('.era-cel-flavor');
-          if (nameEl) nameEl.textContent = cel.era.name;
+          // Roman numeral for era id
+          const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+          if (numeralEl) numeralEl.textContent = ROMAN[cel.era.id] || String(cel.era.id);
+          if (nameEl) nameEl.textContent = cel.era.name.toUpperCase();
           if (flavorEl) flavorEl.textContent = ERA_FLAVOR[cel.era.id] || `the ${cel.era.name} era begins.`;
         }
         el.style.opacity = String(Math.max(0, Math.min(1, fadeAlpha)));

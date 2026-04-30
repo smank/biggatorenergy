@@ -15,6 +15,11 @@ let _spawnDeathParticles = null;
 let _waterY = 0;
 let _wildlifeState = null;
 
+// Hover tooltip state — exported so main.js can read and update the DOM element
+export const hoverState = { kind: null, name: null, clientX: 0, clientY: 0 };
+let _lastHoverTime = 0;
+const HOVER_THROTTLE_MS = 33; // ~30fps
+
 // Hold-detection state
 let _holdTimer = 0;
 let _holdClientX = 0;
@@ -243,6 +248,38 @@ export function updatePlayerControl(dt, pointerDown, clientX, clientY) {
   }
 }
 
+// Classify what's under the cursor for hover tooltip + cursor styling
+function classifyHover(cx, cy) {
+  const player = getPlayerGator();
+  if (!player) return { kind: 'empty', name: null };
+
+  // Own gator?
+  const hitGator = hitTestGators(cx, cy);
+  if (hitGator) {
+    if (hitGator.id === player.id) return { kind: 'self', name: hitGator.gator.name || null };
+    const tg = hitGator.gator;
+    const linId = tg.lineage?.dynastyId || tg.lineageId;
+    const isBloodline = linId === _dynasty.id;
+    if (isBloodline && tg.stage === 'adult' && tg.sex !== player.gator.sex) {
+      return { kind: 'mate', name: tg.name || null };
+    }
+    if (tg.sex === 'male' && tg.stage === 'adult' && tg.sex === player.gator.sex) {
+      return { kind: 'rival', name: tg.name || null };
+    }
+    return { kind: 'gator', name: tg.name || null };
+  }
+
+  // Prey?
+  const hitPrey = hitTestPrey(cx, cy);
+  if (hitPrey) return { kind: 'prey', name: hitPrey.prey.type || 'prey' };
+
+  // Wildlife?
+  const hitWildlife = hitTestWildlife(cx, cy);
+  if (hitWildlife) return { kind: 'wildlife', name: hitWildlife.type || null };
+
+  return { kind: 'empty', name: null };
+}
+
 export function initPlayerControl({ canvas, world, dynasty, playSplash, addRipple, particles, spawnDeathParticles, waterY, wildlifeState }) {
   _canvas = canvas;
   _world = world;
@@ -253,6 +290,25 @@ export function initPlayerControl({ canvas, world, dynasty, playSplash, addRippl
   _spawnDeathParticles = spawnDeathParticles;
   _waterY = waterY;
   _wildlifeState = wildlifeState;
+
+  // Pointermove: update hover state (throttled to ~30fps)
+  canvas.addEventListener('pointermove', (e) => {
+    if (!_dynasty || !_dynasty.playerGatorId) return;
+    const now = performance.now();
+    if (now - _lastHoverTime < HOVER_THROTTLE_MS) return;
+    _lastHoverTime = now;
+    const { x, y } = toCanvasCoords(e.clientX, e.clientY);
+    const info = classifyHover(x, y);
+    hoverState.kind = info.kind;
+    hoverState.name = info.name;
+    hoverState.clientX = e.clientX;
+    hoverState.clientY = e.clientY;
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    hoverState.kind = null;
+    hoverState.name = null;
+  });
 }
 
 // Call this whenever dynasty reference changes (e.g. new dynasty created)

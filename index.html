@@ -157,9 +157,36 @@
   </div>
 
   <div id="era-celebration" class="era-celebration hidden" role="status" aria-live="polite">
-    <div class="era-cel-flavor"></div>
+    <div class="era-cel-numeral"></div>
     <div class="era-cel-name"></div>
+    <div class="era-cel-flavor"></div>
   </div>
+
+  <!-- Death cutscene overlay (dynasty mode) -->
+  <div id="death-cutscene" class="death-cutscene hidden" role="status" aria-live="assertive">
+    <div class="death-cutscene-inner">
+      <div class="death-name" id="death-name"></div>
+      <div class="death-meta" id="death-meta"></div>
+      <div class="death-poem" id="death-poem"></div>
+    </div>
+  </div>
+
+  <!-- Player HUD (dynasty mode — bottom-center) -->
+  <div id="player-hud" class="player-hud hidden" role="status" aria-label="your gator status">
+    <canvas id="player-portrait" class="player-portrait" width="28" height="14" aria-hidden="true"></canvas>
+    <div class="player-hud-info">
+      <div class="player-hud-name" id="player-hud-name"></div>
+      <div class="player-hud-bars">
+        <div class="player-bar-row"><span class="player-bar-label">hunger</span><div class="player-bar-track"><div class="player-bar-fill player-bar-hunger" id="hud-bar-hunger"></div></div></div>
+        <div class="player-bar-row"><span class="player-bar-label">energy</span><div class="player-bar-track"><div class="player-bar-fill player-bar-energy" id="hud-bar-energy"></div></div></div>
+        <div class="player-bar-row"><span class="player-bar-label">health</span><div class="player-bar-track"><div class="player-bar-fill player-bar-health" id="hud-bar-health"></div></div></div>
+      </div>
+      <div class="player-hud-action" id="player-hud-action"></div>
+    </div>
+  </div>
+
+  <!-- Hover tooltip (dynasty mode) -->
+  <div id="hover-tooltip" class="hover-tooltip hidden" aria-hidden="true"></div>
 
   <!-- Obituary toggle button + side panel -->
   <button type="button" id="obituary-toggle" aria-label="Toggle obituary log" aria-expanded="false" aria-controls="obituary-panel">log</button>
@@ -196,6 +223,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260426-control"></script>
+  <script type="module" src="js/main.js?v=20260429-game"></script>
 </body>
 </html>
