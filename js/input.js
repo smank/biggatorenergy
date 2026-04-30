@@ -43,16 +43,22 @@ export function createInputHandler(canvas, callbacks) {
     };
   }
 
-  // Click — activate current power (god mode) or drop food (normal)
+  // Click — activate current power (god mode) or drop food (terrarium fallback)
   function onDown(e) {
     if (e.button === 2) return;
     e.preventDefault();
     const pos = getGamePos(e);
     if (godMode) {
       callbacks.onPower(pos.x, pos.y, POWER_NAMES[currentPower]);
-    } else {
-      callbacks.onPower(pos.x, pos.y, 'food');
+      return;
     }
+    // In dynasty mode with a controlled gator, clicks belong to the player —
+    // the pointerup in main.js dispatches them to playerControl. Don't also
+    // drop food on top of that.
+    if (callbacks.isPlayerControlActive && callbacks.isPlayerControlActive()) {
+      return;
+    }
+    callbacks.onPower(pos.x, pos.y, 'food');
   }
 
   // Right-click — always scare

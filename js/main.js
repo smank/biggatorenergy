@@ -931,6 +931,9 @@ createInputHandler(canvas, {
   onScare: triggerScare,
   onMove: (x, y) => { cursorX = x; cursorY = y; },
   isSimStarted: () => simulationStarted,
+  // Dynasty mode with a controlled gator — clicks go to player control,
+  // never drop food. Hold G for god mode if you want to override.
+  isPlayerControlActive: () => gameMode === MODE_DYNASTY && !!dynasty?.playerGatorId,
 });
 
 // --- Gator Inspector ---
