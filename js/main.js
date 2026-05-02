@@ -977,6 +977,27 @@ initPlayerControl({
 // Make sure the playerControl module knows about the wildlife state too
 setPlayerControlWildlife(wildlifeState);
 
+// Debug helper — type bge.debug() in the console to see control wiring state
+window.bge = {
+  debug() {
+    const players = [];
+    for (const [id, , g] of world.query('transform', 'gator')) {
+      if (g.isPlayer) players.push({ id, name: g.name, stage: g.stage });
+    }
+    console.log('[bge debug]', {
+      mode: gameMode,
+      simulationStarted,
+      isPaused: isPaused(),
+      dynastyId: dynasty?.id,
+      playerGatorId: dynasty?.playerGatorId,
+      playerExists: dynasty?.playerGatorId ? !!world.get(dynasty.playerGatorId, 'gator') : false,
+      gatorsWithIsPlayer: players,
+      gatorCount: world.count('gator'),
+    });
+    return 'check console';
+  },
+};
+
 // Pointer hold tracking
 let _pointerDown = false;
 let _pointerClientX = 0;

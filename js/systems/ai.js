@@ -74,9 +74,12 @@ export function aiSystem(world, dt, rng, waterY) {
         const dy = ov.y - tr.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 3) {
-          const speed = (gator.traits?.speed || 1) * 10;
+          // Player gator moves with intent — much faster than ambient AI gators.
+          // Water drag (×0.6 in physics) makes ambient speed feel sluggish, so
+          // we crank base speed here.
+          const speed = (gator.traits?.speed || 1) * 40;
           tr.vx = (dx / dist) * speed;
-          tr.vy = (dy / dist) * speed * 0.3;
+          tr.vy = (dy / dist) * speed * 0.4;
           tr.direction = dx > 0 ? 1 : -1;
           if (gator.inWater) gator.frame = 'swim';
         } else {
@@ -97,7 +100,7 @@ export function aiSystem(world, dt, rng, waterY) {
           const dx = ptr.x - tr.x;
           const dy = ptr.y - tr.y;
           const dist = distance(tr.x, tr.y, ptr.x, ptr.y);
-          const speed = (gator.traits?.speed || 1) * 15;
+          const speed = (gator.traits?.speed || 1) * 50; // hunt fast
           if (dist > 1) {
             tr.vx = (dx / dist) * speed;
             tr.vy = (dy / dist) * speed * 0.5;
