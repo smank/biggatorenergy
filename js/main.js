@@ -24,6 +24,7 @@ import { loadObituary, updateMoments, renderMoments, renderObituaryPanel } from 
 import { attachLineage } from './game/dynasty.js';
 import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
 import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife, hoverState } from './systems/playerControl.js';
+import { createGoalState, loadGoals, saveGoals, updateGoals, activeGoal } from './game/goals.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -512,6 +513,7 @@ let dynasty = null;            // { id, name, foundedAt, founderNames, era, eraC
 let lineagePoints = loadLineagePoints();
 let dynastyFounderIds = [];    // ids of founders, tracked for extinction check
 let extinctionGraceTimer = 0;  // don't trigger game-over during the first few seconds of a new dynasty
+let goalState = null;          // goals system state for dynasty mode
 
 // --- Era Celebration state ---
 let pendingEraCelebration = null; // { era, timer } — set when an era advance fires
@@ -589,6 +591,11 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
     // Vegetation catches up with the full elapsed time
     updateVegGrowth(elapsed);
     vegState.age += elapsed;
+  }
+
+  // Load goal state for continued dynasty saves
+  if (gameMode === MODE_DYNASTY && dynasty && dynasty.id) {
+    goalState = loadGoals(dynasty.id) ?? createGoalState();
   }
 
   // Restore player-control on continued dynasty saves.
@@ -1214,6 +1221,25 @@ function updatePlayerHUD() {
   const hudEl = document.getElementById('player-hud');
   if (!hudEl) return;
   hudEl.classList.remove('hidden');
+
+  // Goal objective line
+  const goalEl = document.getElementById('player-hud-goal');
+  if (goalEl) {
+    if (goalState) {
+      const goalCtx = {
+        player: gator,
+        dynasty,
+        world,
+        simTime,
+        era: dynasty.era || 1,
+        obituary: obituaryState?.entries || [],
+      };
+      const goal = activeGoal(goalState, goalCtx);
+      goalEl.textContent = goal ? '▸ ' + goal.text : '';
+    } else {
+      goalEl.textContent = '';
+    }
+  }
 
   // Name
   const nameEl = document.getElementById('player-hud-name');
@@ -1869,6 +1895,7 @@ function commitFounders() {
   };
   extinctionGraceTimer = 30; // 30s of grace so a stray event doesn't end it frame 1
   dynastyFounderIds = [];
+  goalState = createGoalState(); // fresh goal state for new dynasty
 
   const controlSex = p.controlSex || 'male';
 
@@ -2360,6 +2387,32 @@ function gameLoop(timestamp) {
   if (events.ufo) { setUFO(true); } else { setUFO(false); }
   updateDeathParticles(particles, dt);
   updateMoments(obituaryState, dt);
+
+  // Goals system — dynasty mode only
+  if (gameMode === MODE_DYNASTY && dynasty && goalState) {
+    const playerGator = dynasty.playerGatorId ? world.get(dynasty.playerGatorId, 'gator') : null;
+    const goalCtx = {
+      player: playerGator,
+      dynasty,
+      world,
+      simTime,
+      era: dynasty.era || 1,
+      obituary: obituaryState?.entries || [],
+    };
+    const goalCallbacks = {
+      onComplete(_goal) {
+        // goal completion moment is handled in onAwardLP + addMoment below
+      },
+      onAwardLP(amount) {
+        lineagePoints += amount;
+        saveLineagePoints(lineagePoints);
+      },
+      addMoment(text) {
+        if (text) addMoment(obituaryState, { text, x: null, y: null, color: '#cca050' });
+      },
+    };
+    updateGoals(goalState, dt, goalCtx, goalCallbacks);
+  }
 
   // Player HUD + hover tooltip (HTML overlays)
   updatePlayerHUD();

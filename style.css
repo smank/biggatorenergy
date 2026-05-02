@@ -1025,6 +1025,18 @@ body.show-rotate #start-overlay {
   min-width: 110px;
 }
 
+.player-hud-goal {
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: #cca050;
+  text-transform: lowercase;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.player-hud-goal:empty {
+  display: none;
+}
+
 .player-hud-name {
   font-size: 13px;
   font-weight: 700;

@@ -69,6 +69,11 @@ export function aiSystem(world, dt, rng, waterY) {
         gator.breatheTimer = gator.breatheOffset === 0 ? rng.float(6, 12) : 0.5;
       }
 
+      // Compute need-derived speed multiplier
+      let needSpeedMult = 1.0;
+      if (gator.hunger > 0.7) needSpeedMult *= 0.7;  // sluggish when hungry
+      if (gator.energy < 0.15) needSpeedMult *= 0.6; // exhausted
+
       if (ov.action === 'moveTo') {
         const dx = ov.x - (tr.x + (gator.spriteW || 10) / 2);
         const dy = ov.y - tr.y;
@@ -77,7 +82,7 @@ export function aiSystem(world, dt, rng, waterY) {
           // Player gator moves with intent — much faster than ambient AI gators.
           // Water drag (×0.6 in physics) makes ambient speed feel sluggish, so
           // we crank base speed here.
-          const speed = (gator.traits?.speed || 1) * 40;
+          const speed = (gator.traits?.speed || 1) * 40 * needSpeedMult;
           tr.vx = (dx / dist) * speed;
           tr.vy = (dy / dist) * speed * 0.4;
           tr.direction = dx > 0 ? 1 : -1;
@@ -100,7 +105,7 @@ export function aiSystem(world, dt, rng, waterY) {
           const dx = ptr.x - tr.x;
           const dy = ptr.y - tr.y;
           const dist = distance(tr.x, tr.y, ptr.x, ptr.y);
-          const speed = (gator.traits?.speed || 1) * 50; // hunt fast
+          const speed = (gator.traits?.speed || 1) * 50 * needSpeedMult; // hunt fast
           if (dist > 1) {
             tr.vx = (dx / dist) * speed;
             tr.vy = (dy / dist) * speed * 0.5;
@@ -114,7 +119,9 @@ export function aiSystem(world, dt, rng, waterY) {
             pp.alive = false;
             world.kill(ov.targetId);
             gator.frame = 'eat';
-            gator.hunger = Math.max(0, gator.hunger - (pp.value || 0.15));
+            const preyValue = pp.value || 0.15;
+            gator.hunger = Math.max(0, gator.hunger - preyValue);
+            gator.energy = Math.min(1, (gator.energy || 0) + preyValue * 0.5);
             gator.mealCount = (gator.mealCount || 0) + 1;
             const maxS = (gator.traits?.maxSize || 1) * 2.0;
             gator.sizeScale = Math.min(maxS, 1 + gator.mealCount * 0.02);
@@ -133,6 +140,17 @@ export function aiSystem(world, dt, rng, waterY) {
         const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
         gator.energy = Math.max(0, gator.energy - dt * activityDrain);
       }
+
+      // Starvation health tick — hunger > 0.9 eats health
+      if (gator.hunger > 0.9) {
+        gator.health = Math.max(0, (gator.health || 1) - dt * 0.05);
+      }
+
+      // Energy recovery when idle on land
+      if (gator.state === 'idle' && !gator.inWater) {
+        gator.energy = Math.min(1, (gator.energy || 0) + dt * 0.05);
+      }
+
       continue; // skip normal AI for player gator
     }
 
@@ -166,6 +184,14 @@ export function aiSystem(world, dt, rng, waterY) {
       if (gator.state !== 'sleeping') {
         const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
         gator.energy = Math.max(0, gator.energy - dt * activityDrain);
+      }
+      // Starvation health tick
+      if (gator.hunger > 0.9) {
+        gator.health = Math.max(0, (gator.health || 1) - dt * 0.05);
+      }
+      // Energy recovery when idle on land
+      if (gator.state === 'idle' && !gator.inWater) {
+        gator.energy = Math.min(1, (gator.energy || 0) + dt * 0.05);
       }
       continue;
     }

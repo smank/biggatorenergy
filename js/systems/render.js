@@ -874,6 +874,32 @@ export function renderGators(ctx, world, simTime) {
       ctx.fillRect(drawX, drawY, spriteW, spriteH);
     }
 
+    // Need indicators — pulsing dots above the player gator's head
+    // Rendered BEFORE the sprite so they appear underneath name marks
+    if (gator.isPlayer) {
+      const spriteW = (gator.spriteW || 10) * scale;
+      const dotY = drawY - 4;
+      const dotCenterX = drawX + spriteW / 2;
+      const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(Date.now() * 0.008));
+
+      const needDots = [];
+      if ((gator.hunger || 0) > 0.75) needDots.push('#ee9050'); // hungry
+      if ((gator.energy !== undefined ? gator.energy : 1) < 0.2) needDots.push('#ddcc40'); // exhausted
+      if ((gator.health !== undefined ? gator.health : 1) < 0.4) needDots.push('#dd5050'); // injured
+
+      if (needDots.length > 0) {
+        const totalW = needDots.length * 2 + (needDots.length - 1) * 4;
+        let dotX = Math.floor(dotCenterX - totalW / 2);
+        ctx.globalAlpha = pulse;
+        for (const color of needDots) {
+          ctx.fillStyle = color;
+          ctx.fillRect(dotX, dotY, 2, 2);
+          dotX += 6;
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
     if (scale > 1.05) {
       drawScaledSprite(ctx, sprite, drawX, drawY, tr.direction === -1, tints, scale);
     } else {
