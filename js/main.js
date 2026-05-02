@@ -966,12 +966,16 @@ createInputHandler(canvas, {
 // --- Gator Inspector ---
 initInspector({ canvas, world, GATOR_STAGES });
 
-// --- Player Control system init (wired later in commitFounders when dynasty is set) ---
+// --- Player Control system init ---
+// Pass the loaded dynasty so continued saves wire up immediately. Fresh
+// dynasties also call setPlayerControlDynasty in commitFounders below.
 initPlayerControl({
-  canvas, world, dynasty: null,
+  canvas, world, dynasty,
   playSplash, addRipple, particles, spawnDeathParticles,
   waterY, wildlifeState,
 });
+// Make sure the playerControl module knows about the wildlife state too
+setPlayerControlWildlife(wildlifeState);
 
 // Pointer hold tracking
 let _pointerDown = false;
