@@ -979,10 +979,14 @@ setPlayerControlWildlife(wildlifeState);
 
 // Debug helper — type bge.debug() in the console to see control wiring state
 window.bge = {
+  logClicks: false, // set bge.logClicks = true to log every pointerup
   debug() {
     const players = [];
+    const bloodline = [];
     for (const [id, , g] of world.query('transform', 'gator')) {
       if (g.isPlayer) players.push({ id, name: g.name, stage: g.stage });
+      const linId = g.lineage?.dynastyId || g.lineageId;
+      if (dynasty && linId === dynasty.id) bloodline.push({ id, name: g.name, stage: g.stage, age: Math.floor((g.age || 0) / 60) + 'd' });
     }
     console.log('[bge debug]', {
       mode: gameMode,
@@ -993,8 +997,9 @@ window.bge = {
       playerExists: dynasty?.playerGatorId ? !!world.get(dynasty.playerGatorId, 'gator') : false,
       gatorsWithIsPlayer: players,
       gatorCount: world.count('gator'),
+      bloodline,
     });
-    return 'check console';
+    return 'check console — set bge.logClicks = true to trace clicks';
   },
 };
 
@@ -1013,6 +1018,7 @@ canvas.addEventListener('pointerleave', () => { _pointerDown = false; });
 
 canvas.addEventListener('pointerup', (e) => {
   _pointerDown = false;
+  if (window.bge?.logClicks) console.log('[bge] pointerup', { button: e.button, mode: gameMode, dynastyId: dynasty?.id, playerId: dynasty?.playerGatorId });
   if (e.button !== 0) return;
   if (isGodMode()) return; // god mode clicks are for powers, not inspection
   if (gameOver) return;    // let the game-over handler own this
@@ -1025,8 +1031,8 @@ canvas.addEventListener('pointerup', (e) => {
   const cy = (e.clientY - rect.top) * scaleY;
 
   // In dynasty mode, try player control dispatch first.
-  // Shift-click or no player gator = fall through to inspector.
-  if (gameMode === MODE_DYNASTY && dynasty && dynasty.playerGatorId && !isShiftHeld) {
+  // dispatchClick auto-promotes a player gator if none was set.
+  if (gameMode === MODE_DYNASTY && dynasty && !isShiftHeld) {
     const consumed = dispatchClick(cx, cy, false);
     if (consumed) return;
   }

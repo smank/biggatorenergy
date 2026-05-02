@@ -100,11 +100,32 @@ function hitTestPrey(cx, cy) {
 }
 
 function getPlayerGator() {
-  if (!_dynasty || !_dynasty.playerGatorId) return null;
-  const gator = _world.get(_dynasty.playerGatorId, 'gator');
-  const tr = _world.get(_dynasty.playerGatorId, 'transform');
-  if (!gator || !tr) return null;
-  return { id: _dynasty.playerGatorId, gator, tr };
+  if (!_dynasty) return null;
+  // Try the saved id first
+  if (_dynasty.playerGatorId) {
+    const gator = _world.get(_dynasty.playerGatorId, 'gator');
+    const tr = _world.get(_dynasty.playerGatorId, 'transform');
+    if (gator && tr) {
+      gator.isPlayer = true; // defensive — make sure flag is set
+      return { id: _dynasty.playerGatorId, gator, tr };
+    }
+  }
+  // Saved id missing or stale — auto-promote eldest living bloodline non-egg.
+  let bestId = null, bestGator = null, bestTr = null;
+  for (const [id, tr, gator] of _world.query('transform', 'gator')) {
+    const linId = gator.lineage?.dynastyId || gator.lineageId;
+    if (linId !== _dynasty.id) continue;
+    if (gator.stage === 'egg') continue;
+    if (!bestGator || (gator.age || 0) > (bestGator.age || 0)) {
+      bestId = id; bestGator = gator; bestTr = tr;
+    }
+  }
+  if (bestGator) {
+    bestGator.isPlayer = true;
+    _dynasty.playerGatorId = bestId;
+    return { id: bestId, gator: bestGator, tr: bestTr };
+  }
+  return null;
 }
 
 export function dispatchClick(canvasX, canvasY, isShiftHeld) {
