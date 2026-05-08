@@ -185,7 +185,86 @@ body.show-rotate #start-overlay {
     animation: none;
     opacity: 1;
   }
+  /* Playhouse: disable wiggle + bouncy transitions */
+  .title-big {
+    animation: none;
+  }
+  .title-btn,
+  .title-info,
+  .title-back,
+  .title-info-close,
+  .bge-btn,
+  .bge-vault-link,
+  .title-vault-link,
+  .unlock-buy-btn,
+  .family-tree-become-btn,
+  .family-tree-node,
+  .bge-founder,
+  .intro-card-btn {
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .title-btn:hover,
+  .title-btn:focus-visible,
+  .bge-btn:hover,
+  .bge-btn:focus-visible,
+  .title-info:hover,
+  .title-info:focus-visible,
+  .unlock-buy-btn:hover,
+  .unlock-buy-btn:focus-visible,
+  .family-tree-become-btn:hover,
+  .family-tree-node:hover {
+    transform: none;
+  }
 }
+
+/* ============================================================
+   PLAYHOUSE PALETTE — Pee-Wee meets Gumby
+   ============================================================ */
+@font-face {
+  font-family: 'Fredoka One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/fredoka-one.woff2') format('woff2');
+}
+
+:root {
+  --bge-green-dark: #2a4a2e;
+  --bge-green: #6aaa5a;
+  --bge-coral: #cc6644;
+  --bge-teal: #44a8b4;
+  --bge-mustard: #ddaa30;
+  --bge-cream: #f0e8d0;
+  --font-display: 'Fredoka One', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+}
+
+/* ============================================================
+   TITLE WIGGLE KEYFRAME
+   ============================================================ */
+@keyframes title-wiggle {
+  0%, 100% { transform: rotate(-1.5deg) rotate(-1deg); }
+  25%       { transform: rotate(-1.5deg) rotate(0.6deg); }
+  50%       { transform: rotate(-1.5deg) rotate(1deg); }
+  75%       { transform: rotate(-1.5deg) rotate(0.2deg); }
+}
+
+/* ============================================================
+   TITLE SCREEN DECORATION DOTS (background stickers)
+   ============================================================ */
+.title-dot {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.title-dot-1  { width: 80px;  height: 80px;  background: var(--bge-coral);   opacity: 0.12; top: -28px;  left: -18px; }
+.title-dot-2  { width: 52px;  height: 52px;  background: var(--bge-teal);    opacity: 0.10; top: 12%;   right: -20px; border-radius: 50% 40% 60% 50%; }
+.title-dot-3  { width: 36px;  height: 36px;  background: var(--bge-mustard); opacity: 0.14; bottom: 8%; left: 6%; transform: rotate(22deg); border-radius: 4px; }
+.title-dot-4  { width: 64px;  height: 64px;  background: var(--bge-coral);   opacity: 0.08; bottom: -20px; right: 10%; }
+.title-dot-5  { width: 24px;  height: 24px;  background: var(--bge-teal);    opacity: 0.15; top: 30%;  left: -10px; border-radius: 50% 30% 50% 40%; }
+.title-dot-6  { width: 44px;  height: 44px;  background: var(--bge-mustard); opacity: 0.10; top: 60%;  right: -14px; transform: rotate(-15deg); border-radius: 50%; }
+.title-dot-7  { width: 18px;  height: 18px;  background: var(--bge-green);   opacity: 0.18; top: 50%;  left: 15%; border-radius: 50%; }
+.title-dot-8  { width: 30px;  height: 30px;  background: var(--bge-coral);   opacity: 0.11; bottom: 18%; left: 20%; border-radius: 40% 60% 50% 50%; }
 
 /* --- Title screen — transparent so the animated swamp shows through --- */
 .title-overlay {
@@ -198,6 +277,7 @@ body.show-rotate #start-overlay {
   font-family: Menlo, Monaco, 'Courier New', monospace;
   color: #b8d4a8;
   pointer-events: auto;
+  overflow: hidden;
 }
 .title-overlay.hidden { display: none; }
 
@@ -239,19 +319,26 @@ body.show-rotate #start-overlay {
   text-align: center;
 }
 
+/* Chunky display heading + subtle wiggle */
 .title-big {
-  font-family: Menlo, Monaco, 'Courier New', monospace;
-  font-weight: 900;
-  font-size: clamp(18px, 5.5vw, 40px);
-  letter-spacing: 0.22em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 7vw, 56px);
+  letter-spacing: 0.06em;
   color: #7aaa6a;
-  text-shadow: 3px 3px 0 #0a0a12, 0 0 16px rgba(122, 170, 106, 0.3);
+  text-shadow:
+    4px 4px 0 var(--bge-coral),
+    8px 8px 0 var(--bge-green-dark),
+    0 0 24px rgba(122, 170, 106, 0.25);
   line-height: 1;
   white-space: nowrap;
+  transform: rotate(-1.5deg);
+  display: inline-block;
+  animation: title-wiggle 4s ease-in-out infinite;
 }
 
 .title-sub {
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: clamp(9px, 1.6vw, 13px);
   letter-spacing: 0.25em;
   color: #4a6a4a;
@@ -268,8 +355,10 @@ body.show-rotate #start-overlay {
 .title-menu.hidden { display: none; }
 
 .title-section-label {
-  font-size: 10px;
-  letter-spacing: 0.3em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0.12em;
   color: #6aaa5a;
   text-transform: lowercase;
   text-align: center;
@@ -283,54 +372,85 @@ body.show-rotate #start-overlay {
 }
 .title-row .title-btn { flex: 1; }
 
+/* ? info button */
 .title-info {
   appearance: none;
-  background: rgba(15, 24, 18, 0.85);
-  border: 1px solid #2a4a2e;
-  color: #6a8a5a;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  width: 40px;
+  background: rgba(15, 24, 18, 0.88);
+  border: 2px solid var(--bge-teal);
+  color: var(--bge-teal);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  width: 44px;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  box-shadow: 3px 3px 0 var(--bge-green-dark);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    box-shadow 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transform: rotate(0.5deg);
 }
 .title-info:hover, .title-info:focus-visible {
   background: rgba(42, 74, 46, 0.9);
-  border-color: #6aaa5a;
-  color: #cce0b8;
+  color: var(--bge-cream);
   outline: none;
+  transform: scale(1.06) rotate(0deg);
+  box-shadow: 2px 2px 0 var(--bge-green-dark);
+}
+.title-info:active {
+  transform: scale(0.96);
+  box-shadow: 1px 1px 0 var(--bge-green-dark);
 }
 
+/* Info popover — tilted card with color shadow */
 .title-info-popover {
   position: absolute;
   z-index: 3;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) rotate(-2deg);
   max-width: 380px;
   width: calc(100% - 48px);
   background: #111a14;
-  border: 1px solid #4a6a4e;
-  padding: 18px 20px 14px;
+  border: 2px solid var(--bge-teal);
+  border-radius: 4px;
+  padding: 20px 22px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 0 0 4px rgba(10, 10, 18, 0.6), 0 0 24px rgba(0, 0, 0, 0.8);
+  box-shadow:
+    6px 6px 0 var(--bge-coral),
+    12px 12px 0 var(--bge-green-dark);
+}
+/* doodle sparkle corner */
+.title-info-popover::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  width: 20px;
+  height: 20px;
+  background: var(--bge-mustard);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  opacity: 0.85;
+  transform: rotate(18deg);
 }
 .title-info-popover.hidden { display: none; }
+
 .title-info-heading {
-  font-size: 12px;
-  letter-spacing: 0.25em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 0.08em;
   color: #8aca6a;
   text-transform: lowercase;
-  font-weight: 700;
 }
 .title-info-body {
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
   color: #b8d4a8;
@@ -346,7 +466,7 @@ body.show-rotate #start-overlay {
   background: transparent;
   border: none;
   color: #4a6a4a;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 10px;
   letter-spacing: 0.25em;
   text-transform: lowercase;
@@ -354,31 +474,48 @@ body.show-rotate #start-overlay {
   padding: 4px;
   margin-top: 4px;
   align-self: flex-end;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s;
 }
-.title-info-close:hover { color: #8aca6a; }
+.title-info-close:hover {
+  color: #8aca6a;
+  transform: scale(1.06);
+}
 
+/* Main mode buttons */
 .title-btn {
   appearance: none;
-  background: rgba(15, 24, 18, 0.85);
-  border: 1px solid #2a4a2e;
+  background: rgba(15, 24, 18, 0.88);
+  border: 2px solid var(--bge-green-dark);
+  border-radius: 3px;
   color: #b8d4a8;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   padding: 14px 18px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 3px;
-  transition: background 0.1s, border-color 0.1s, transform 0.05s;
+  box-shadow: 3px 3px 0 var(--bge-teal), 6px 6px 0 var(--bge-green-dark);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    box-shadow 0.15s;
   text-align: left;
 }
+.title-btn:nth-child(odd)  { transform: rotate(-0.5deg); }
+.title-btn:nth-child(even) { transform: rotate(0.5deg); }
 .title-btn:hover,
 .title-btn:focus-visible {
   background: rgba(42, 74, 46, 0.9);
-  border-color: #6aaa5a;
+  border-color: var(--bge-green);
   outline: none;
+  transform: scale(1.06) rotate(0deg);
+  box-shadow: 2px 2px 0 var(--bge-teal), 4px 4px 0 var(--bge-green-dark);
 }
-.title-btn:active { transform: translateY(1px); }
+.title-btn:active {
+  transform: scale(0.96);
+  box-shadow: 1px 1px 0 var(--bge-teal);
+}
 .title-btn[disabled],
 .title-btn.disabled {
   opacity: 0.35;
@@ -404,7 +541,7 @@ body.show-rotate #start-overlay {
   background: transparent;
   border: none;
   color: #4a6a4a;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 11px;
   letter-spacing: 0.25em;
   text-transform: lowercase;
@@ -412,8 +549,12 @@ body.show-rotate #start-overlay {
   padding: 8px;
   margin-top: 4px;
   align-self: center;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s;
 }
-.title-back:hover { color: #8aca6a; }
+.title-back:hover {
+  color: #8aca6a;
+  transform: scale(1.06);
+}
 
 .title-footer {
   font-size: 9px;
@@ -423,11 +564,13 @@ body.show-rotate #start-overlay {
   margin-top: 8px;
 }
 
-/* --- Dynasty overlays (mode picker / founding pair / game over) --- */
+/* ============================================================
+   DYNASTY OVERLAYS (founding pair / game over / vault / family tree / intro)
+   ============================================================ */
 .bge-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 18, 0.9);
+  background: rgba(10, 10, 18, 0.88);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -438,33 +581,73 @@ body.show-rotate #start-overlay {
 }
 .bge-overlay.hidden { display: none; }
 
+/* Base card — gets tilt overrides per-card below */
 .bge-card {
   background: #111a14;
-  border: 1px solid #2a4a2e;
+  border: 2px solid var(--bge-green-dark);
+  border-radius: 5px;
   padding: 28px 32px;
   max-width: 480px;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 0 0 4px rgba(42, 74, 46, 0.25);
+  box-shadow:
+    6px 6px 0 var(--bge-coral),
+    12px 12px 0 var(--bge-green-dark);
+  position: relative;
 }
 
+/* Peeking-eye doodle top-left corner of cards */
+.bge-card::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 14px;
+  width: 16px;
+  height: 10px;
+  background: var(--bge-teal);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  opacity: 0.7;
+}
+.bge-card::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 18px;
+  width: 8px;
+  height: 8px;
+  background: var(--bge-green-dark);
+  border-radius: 50%;
+  opacity: 0.85;
+}
+
+/* Individual card tilts */
+#founding-pair   .bge-card { transform: rotate(1deg); }
+#game-over       .bge-card { transform: rotate(-0.8deg); }
+#unlocks-shop    .bge-card { transform: rotate(-1deg); }
+#family-tree-overlay .bge-card { transform: rotate(0.5deg); }
+#intro-tutorial  .bge-card { transform: rotate(-0.7deg); }
+#inspector-overlay .bge-card { transform: rotate(0.4deg); }
+
 .bge-card h2 {
-  font-size: 16px;
-  letter-spacing: 4px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 0.06em;
   text-transform: lowercase;
   color: #8aca6a;
-  font-weight: 900;
   margin-bottom: 4px;
 }
 
+/* Shared button base */
 .bge-btn {
   appearance: none;
   background: #0f1812;
-  border: 1px solid #2a4a2e;
+  border: 2px solid var(--bge-green-dark);
+  border-radius: 3px;
   color: #b8d4a8;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 13px;
   padding: 14px 16px;
   cursor: pointer;
@@ -472,13 +655,23 @@ body.show-rotate #start-overlay {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  transition: background 0.1s, border-color 0.1s;
+  box-shadow: 3px 3px 0 var(--bge-teal), 6px 6px 0 var(--bge-green-dark);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    box-shadow 0.15s;
   text-align: left;
 }
 .bge-btn:hover, .bge-btn:focus-visible {
   background: #1a2a1e;
   border-color: #4a6a4e;
   outline: none;
+  transform: scale(1.06) rotate(0deg);
+  box-shadow: 2px 2px 0 var(--bge-teal), 3px 3px 0 var(--bge-green-dark);
+}
+.bge-btn:active {
+  transform: scale(0.96);
+  box-shadow: 1px 1px 0 var(--bge-teal);
 }
 .bge-btn-title {
   font-size: 13px;
@@ -503,13 +696,26 @@ body.show-rotate #start-overlay {
   flex-direction: row;
   justify-content: center;
 }
+/* nth-child tilts on button rows */
+.bge-row .bge-btn:nth-child(odd)  { transform: rotate(-0.5deg); }
+.bge-row .bge-btn:nth-child(even) { transform: rotate(0.5deg); }
+.bge-row .bge-btn:nth-child(odd):hover,
+.bge-row .bge-btn:nth-child(odd):focus-visible  { transform: scale(1.06) rotate(0deg); }
+.bge-row .bge-btn:nth-child(even):hover,
+.bge-row .bge-btn:nth-child(even):focus-visible { transform: scale(1.06) rotate(0deg); }
+
 .bge-btn-primary {
-  background: #2a4a2e;
+  background: var(--bge-green-dark);
   color: #eeffdd;
-  border-color: #6aaa5a;
+  border-color: var(--bge-green);
+  box-shadow: 3px 3px 0 var(--bge-coral), 6px 6px 0 #1a2a1e;
 }
 .bge-btn-primary:hover, .bge-btn-primary:focus-visible {
   background: #3a5a3e;
+  box-shadow: 2px 2px 0 var(--bge-coral), 3px 3px 0 #1a2a1e;
+}
+.bge-btn-primary:active {
+  box-shadow: 1px 1px 0 var(--bge-coral);
 }
 
 .bge-row {
@@ -532,15 +738,22 @@ body.show-rotate #start-overlay {
   gap: 12px;
 }
 
+/* Founder cards: alternating ±2deg */
 .bge-founder {
   background: #0a120e;
-  border: 1px solid #2a4a2e;
+  border: 2px solid var(--bge-green-dark);
+  border-radius: 3px;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   align-items: center;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.bge-founder:nth-child(odd)  { transform: rotate(-2deg); }
+.bge-founder:nth-child(even) { transform: rotate(2deg); }
+.bge-founder:hover { transform: rotate(0deg) scale(1.02); }
+
 .bge-founder-preview {
   width: 112px;
   height: 40px;
@@ -550,9 +763,9 @@ body.show-rotate #start-overlay {
 .bge-founder-name {
   width: 100%;
   background: #0f1812;
-  border: 1px solid #2a4a2e;
+  border: 1px solid var(--bge-green-dark);
   color: #cce0b8;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 11px;
   padding: 4px 6px;
   text-align: center;
@@ -560,7 +773,7 @@ body.show-rotate #start-overlay {
 }
 .bge-founder-name:focus {
   outline: none;
-  border-color: #6aaa5a;
+  border-color: var(--bge-green);
 }
 .bge-founder-sex {
   font-size: 9px;
@@ -705,6 +918,18 @@ body.show-rotate #start-overlay {
   color: #8aca6a;
 }
 
+/* --- SVG corner doodles on bge-cards --- */
+.bge-doodle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 4;
+}
+.bge-doodle-tr {
+  top: -14px;
+  right: 18px;
+  transform: rotate(12deg);
+}
+
 /* --- Unlocks shop --- */
 
 .unlocks-card {
@@ -801,25 +1026,33 @@ body.show-rotate #start-overlay {
 
 .unlock-buy-btn {
   appearance: none;
-  background: #2a4a2e;
-  border: 1px solid #6aaa5a;
+  background: var(--bge-green-dark);
+  border: 2px solid var(--bge-green);
+  border-radius: 3px;
   color: #eeffdd;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 10px;
   letter-spacing: 2px;
   text-transform: lowercase;
   padding: 4px 10px;
   cursor: pointer;
-  transition: background 0.1s;
+  box-shadow: 2px 2px 0 var(--bge-teal);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    box-shadow 0.15s;
   white-space: nowrap;
 }
 .unlock-buy-btn:hover,
 .unlock-buy-btn:focus-visible {
   background: #3a5a3e;
   outline: none;
+  transform: scale(1.06) rotate(0deg);
+  box-shadow: 1px 1px 0 var(--bge-teal);
 }
 .unlock-buy-btn:active {
-  transform: translateY(1px);
+  transform: scale(0.96);
+  box-shadow: none;
 }
 
 /* flash animation on purchase */
@@ -853,9 +1086,11 @@ body.show-rotate #start-overlay {
   padding: 6px 0;
   align-self: center;
   margin-top: 4px;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s;
 }
 .bge-vault-link:hover {
   color: #8aca6a;
+  transform: scale(1.06);
 }
 
 /* title-screen vault link — sits below the mode menus */
@@ -871,9 +1106,11 @@ body.show-rotate #start-overlay {
   cursor: pointer;
   padding: 4px 0;
   margin-top: -12px;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.1s;
 }
 .title-vault-link:hover {
   color: #6aaa5a;
+  transform: scale(1.06);
 }
 
 /* --- Era Transition Celebration Overlay (cinematic chapter card) --- */
@@ -1119,21 +1356,21 @@ body.show-rotate #start-overlay {
   display: none;
 }
 
-/* --- Obituary toggle button --- */
+/* --- Gazette toggle button --- */
 #obituary-toggle {
   position: fixed;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   right: calc(12px + env(safe-area-inset-right, 0px));
   z-index: 12;
   appearance: none;
-  background: rgba(10, 15, 10, 0.85);
-  border: 1px solid #2a3a2a;
-  color: #4a6a4a;
-  font-family: Menlo, Monaco, 'Courier New', monospace;
+  background: #f4ead0;
+  border: 1px solid #8a7a5a;
+  color: #3a2a14;
+  font-family: Georgia, 'Times New Roman', Times, serif;
   font-size: 9px;
-  letter-spacing: 0.25em;
-  text-transform: lowercase;
-  padding: 5px 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 8px;
   cursor: pointer;
   line-height: 1;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
@@ -1142,13 +1379,13 @@ body.show-rotate #start-overlay {
 #obituary-toggle:hover,
 #obituary-toggle:focus-visible,
 #obituary-toggle[aria-expanded="true"] {
-  color: #8aca6a;
-  border-color: #4a6a4a;
-  background: rgba(20, 30, 20, 0.92);
+  background: #e8d8b8;
+  border-color: #5a4a2a;
+  color: #1a1a14;
   outline: none;
 }
 
-/* --- Obituary side panel --- */
+/* --- Gazette side panel --- */
 #obituary-panel {
   position: fixed;
   top: 0;
@@ -1156,12 +1393,12 @@ body.show-rotate #start-overlay {
   bottom: 0;
   width: min(320px, 85vw);
   z-index: 11;
-  background: rgba(8, 12, 8, 0.96);
-  border-left: 1px solid #1e2e1e;
+  background: #f4ead0;
+  border-left: 1px solid #8a7a5a;
   display: flex;
   flex-direction: column;
-  font-family: Menlo, Monaco, 'Courier New', monospace;
-  color: #8aaa78;
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  color: #1a1a14;
   overflow: hidden;
   padding-top: env(safe-area-inset-top, 0px);
   padding-right: env(safe-area-inset-right, 0px);
@@ -1171,55 +1408,125 @@ body.show-rotate #start-overlay {
   display: none;
 }
 
-.obit-header {
-  font-size: 9px;
-  letter-spacing: 0.35em;
-  color: #4a6a4a;
-  text-transform: lowercase;
+/* Masthead */
+.gazette-masthead {
+  background: #f4ead0;
+  border-bottom: 3px double #1a1a14;
   padding: 14px 16px 10px;
-  border-bottom: 1px solid #1e2e1e;
   flex-shrink: 0;
+  text-align: center;
+}
+.gazette-title {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1a1a14;
+  line-height: 1.1;
+}
+.gazette-edition {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 9px;
+  color: #5a4a2a;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
 }
 
-.obit-list {
+/* Scrollable body */
+.gazette-body {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
 }
 
-.obit-entry {
-  padding: 8px 16px 7px;
-  border-bottom: 1px solid #141e14;
-}
-.obit-entry:last-child {
-  border-bottom: none;
-}
-
-.obit-name {
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  color: #b8d4a8;
-  text-transform: uppercase;
-  line-height: 1.3;
-}
-
-.obit-detail {
+/* Section label */
+.gazette-section-label {
   font-size: 9px;
-  letter-spacing: 0.12em;
-  color: #4a6a4a;
-  text-transform: lowercase;
-  margin-top: 2px;
+  font-weight: bold;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #5a4a2a;
+  padding: 10px 16px 6px;
+  border-bottom: 1px solid #c8b890;
+}
+
+/* Full obituary entry (top 5) */
+.gazette-entry-full {
+  padding: 12px 16px 10px;
+}
+.gazette-entry-ruled {
+  border-top: 1px solid #c8b890;
+}
+.gazette-entry-header {
+  margin-bottom: 4px;
+}
+.gazette-entry-name {
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  color: #1a1a14;
+  text-transform: uppercase;
+}
+.gazette-entry-lede {
+  font-size: 11px;
+  color: #1a1a14;
+  line-height: 1.45;
+  margin-bottom: 3px;
+}
+.gazette-entry-cause {
+  font-size: 11px;
+  font-style: italic;
+  color: #3a2a14;
   line-height: 1.4;
 }
-
-.obit-empty {
+.gazette-entry-date {
   font-size: 9px;
+  color: #8a7a5a;
+  margin-top: 5px;
+  letter-spacing: 0.04em;
+}
+
+/* Classified-ad block */
+.gazette-classifieds-header {
+  font-size: 8px;
   letter-spacing: 0.2em;
-  color: #2a3a2a;
-  text-transform: lowercase;
-  padding: 24px 16px;
+  color: #8a7a5a;
   text-align: center;
+  padding: 10px 16px 6px;
+  border-top: 1px solid #c8b890;
+}
+.gazette-entry-classified {
+  padding: 3px 16px;
+  font-size: 9px;
+  color: #3a2a14;
+  line-height: 1.5;
+}
+.gazette-classified-name {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.gazette-classified-dot {
+  color: #8a7a5a;
+}
+.gazette-classified-age {
+  font-style: italic;
+}
+.gazette-classified-cause {
+  color: #5a4a2a;
+}
+
+/* Empty state */
+.gazette-empty {
+  font-size: 11px;
+  font-style: italic;
+  color: #8a7a5a;
+  padding: 28px 20px;
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* --- Founding pair control radio --- */
@@ -1284,17 +1591,11 @@ body.show-rotate #start-overlay {
   display: flex;
   align-items: baseline;
   gap: 16px;
-  border-bottom: 1px solid #2a4a2e;
+  border-bottom: 1px solid var(--bge-green-dark);
   padding-bottom: 10px;
   margin-bottom: 12px;
 }
-.family-tree-header h2 {
-  font-size: 13px;
-  letter-spacing: 0.3em;
-  color: #8aca6a;
-  text-transform: lowercase;
-  font-weight: 700;
-}
+/* family tree h2 inherits from .bge-card h2 (Fredoka One) */
 #family-tree-stats {
   font-size: 10px;
   letter-spacing: 0.18em;
@@ -1343,7 +1644,8 @@ body.show-rotate #start-overlay {
 }
 .family-tree-node {
   background: #0a120e;
-  border: 1px solid #2a4a2e;
+  border: 2px solid var(--bge-green-dark);
+  border-radius: 3px;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -1351,18 +1653,22 @@ body.show-rotate #start-overlay {
   gap: 4px;
   min-width: 80px;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    border-color 0.1s;
 }
 .family-tree-node:hover {
   background: #1a2a1e;
-  border-color: #6aaa5a;
+  border-color: var(--bge-green);
+  transform: scale(1.05) rotate(0deg);
 }
 .family-tree-node.is-dead {
   opacity: 0.5;
 }
 .family-tree-node.is-player {
   border-color: #8aca6a;
-  box-shadow: 0 0 0 1px #8aca6a inset, 0 0 8px rgba(138, 202, 106, 0.3);
+  box-shadow: 0 0 0 1px #8aca6a inset, 2px 2px 0 var(--bge-coral);
 }
 .family-tree-name {
   font-size: 9px;
@@ -1380,19 +1686,31 @@ body.show-rotate #start-overlay {
 }
 .family-tree-become-btn {
   appearance: none;
-  background: #2a4a2e;
-  border: 1px solid #6aaa5a;
+  background: var(--bge-green-dark);
+  border: 2px solid var(--bge-green);
+  border-radius: 2px;
   color: #eeffdd;
-  font-family: inherit;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
   font-size: 8px;
   letter-spacing: 0.18em;
   text-transform: lowercase;
   padding: 3px 6px;
   margin-top: 2px;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--bge-coral);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.1s,
+    box-shadow 0.15s;
 }
 .family-tree-become-btn:hover {
   background: #3a5a3e;
+  transform: scale(1.06);
+  box-shadow: 1px 1px 0 var(--bge-coral);
+}
+.family-tree-become-btn:active {
+  transform: scale(0.96);
+  box-shadow: none;
 }
 
 /* --- First-dynasty intro tutorial --- */
@@ -1408,9 +1726,10 @@ body.show-rotate #start-overlay {
 }
 
 .intro-card-header {
-  font-size: clamp(14px, 3.5vw, 20px);
-  font-weight: 900;
-  letter-spacing: 0.35em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(18px, 4vw, 26px);
+  letter-spacing: 0.05em;
   color: #8aca6a;
   text-transform: lowercase;
   line-height: 1.2;

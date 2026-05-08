@@ -3,7 +3,7 @@ import { CANVAS_W, CANVAS_H, TICK_RATE, MAX_DT, WATER_LINE, FOOD_SPAWN_MIN, FOOD
 import { GATOR_STAGES, TINT_COLORS } from './sprites/gator-sprites.js';
 import { FLY_1, FLY_2, FISH_SMALL_1, FISH_SMALL_2, FROG_1, FROG_2 } from './sprites/fauna-sprites.js';
 import { World } from './ecs.js';
-import { aiSystem } from './systems/ai.js';
+import { aiSystem, initAiParticles } from './systems/ai.js';
 import { physicsSystem } from './systems/physics.js';
 import { lifecycleSystem } from './systems/lifecycle.js';
 import { breedingSystem, inheritTraits } from './systems/breeding.js';
@@ -15,7 +15,7 @@ import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
 import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch, playGatorStare, playEggHatch, playEraTransition, playGoalComplete, startStarvingHeartbeat, stopStarvingHeartbeat, setEraAmbient } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
-import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
+import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples, updateBellowRings, renderBellowRings, updateVignettePulse, renderVignettePulse } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
 import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints, updateEraClock, renderEraHUD, initEraDynasty, getCurrentEra, ERA_FLAVOR } from './game/dynasty.js';
 import { initInspector, openInspectorAt, openInspectorForGator, closeInspector } from './systems/inspector.js';
@@ -505,6 +505,7 @@ let simTime = 0;
 const fireState = createFireState();
 const wildlifeState = createWildlifeState();
 const particles = createParticleState();
+initAiParticles(particles); // give ai.js access to particles for kill juice
 const obituaryState = loadObituary();
 
 // --- Mode + Dynasty state (set by load or by mode-picker overlay) ---
@@ -1480,6 +1481,7 @@ function renderPausedFrame(ctx, simTime) {
   renderGators(ctx, world, simTime);
   renderPredators(ctx, world);
   renderRipples(ctx, particles, 0);
+  renderBellowRings(ctx, particles);
   renderWildlife(ctx, wildlifeState, simTime);
   renderAmbientParticles(ctx, particles, simTime);
   renderDeathParticles(ctx, particles);
@@ -1503,6 +1505,7 @@ function renderPausedFrame(ctx, simTime) {
   renderEvents(ctx, events, simTime, waterY);
   renderEnvironmentEffects(ctx, env, waterY, simTime);
   renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
+  renderVignettePulse(ctx, particles, CANVAS_W, CANVAS_H);
 
   renderFullUI(ctx, simTime);
 
@@ -2513,6 +2516,8 @@ function gameLoop(timestamp) {
   // Audio hooks for events
   if (events.ufo) { setUFO(true); } else { setUFO(false); }
   updateDeathParticles(particles, dt);
+  updateBellowRings(particles, dt);
+  updateVignettePulse(particles, dt);
   updateMoments(obituaryState, dt);
 
   // Birth moment tick
@@ -2541,6 +2546,15 @@ function gameLoop(timestamp) {
       onAwardLP(amount) {
         lineagePoints += amount;
         saveLineagePoints(lineagePoints);
+        // "+N lp" floating amber text at center screen
+        if (amount > 0) {
+          addMoment(obituaryState, {
+            text: `+${amount} lp`,
+            x: null,
+            y: null,
+            color: '#ddaa30',
+          });
+        }
       },
       addMoment(text) {
         if (text) addMoment(obituaryState, { text, x: null, y: null, color: '#cca050' });
@@ -2742,6 +2756,7 @@ function gameLoop(timestamp) {
   renderGators(ctx, world, simTime);
   renderPredators(ctx, world);
   renderRipples(ctx, particles, dt);
+  renderBellowRings(ctx, particles);
   renderWildlife(ctx, wildlifeState, simTime);
   renderAmbientParticles(ctx, particles, simTime);
   renderDeathParticles(ctx, particles);
@@ -2781,6 +2796,7 @@ function gameLoop(timestamp) {
   }
 
   renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
+  renderVignettePulse(ctx, particles, CANVAS_W, CANVAS_H);
 
   // Birth moment big text — floats up from nest, fades over 3.5s
   if (birthMoment.active && birthMoment.timer > 0) {

@@ -6,6 +6,7 @@ COPY index.html /usr/share/nginx/html/
 COPY style.css /usr/share/nginx/html/
 COPY og-preview.png /usr/share/nginx/html/
 COPY js/ /usr/share/nginx/html/js/
+COPY fonts/ /usr/share/nginx/html/fonts/
 
 EXPOSE 80
 

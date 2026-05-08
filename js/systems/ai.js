@@ -4,6 +4,13 @@
 import { CANVAS_W } from '../config.js';
 import { distance } from '../utils/math.js';
 import { playBite } from '../audio.js';
+import { spawnKillBlood, triggerVignettePulse } from '../game/particles.js';
+
+// Module-level reference to the shared particle state — set by initAiParticles().
+let _particles = null;
+export function initAiParticles(particleState) {
+  _particles = particleState;
+}
 
 function transition(gator, state, rng) {
   gator.state = state;
@@ -122,6 +129,11 @@ export function aiSystem(world, dt, rng, waterY) {
             pp.alive = false;
             world.kill(ov.targetId);
             playBite();
+            // Player kill juice — blood spurt + vignette
+            if (_particles) {
+              spawnKillBlood(_particles, ptr.x, ptr.y);
+              triggerVignettePulse(_particles, 0.9);
+            }
             gator.frame = 'eat';
             const preyValue = pp.value || 0.15;
             gator.hunger = Math.max(0, gator.hunger - preyValue);

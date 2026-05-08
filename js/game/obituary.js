@@ -173,46 +173,158 @@ export function saveObituary(state) {
 }
 
 // --- Panel HTML helper (called once from main.js after DOM ready) ---
-// Builds the obituary entry list inside the panel element.
+// Builds the Swamp Gazette newspaper inside the panel element.
 export function renderObituaryPanel(state) {
-  const list = document.getElementById('obituary-list');
-  if (!list) return;
-  if (state.entries.length === 0) {
-    list.innerHTML = '<div class="obit-empty">no deaths recorded yet</div>';
-    return;
-  }
-  list.innerHTML = state.entries.map(e => {
-    const name  = e.name || `unnamed ${e.stage}`;
-    const cause = e.cause || 'unknown';
-    const age   = e.age != null ? `${e.age} days` : '';
-    let line1 = name.toUpperCase();
-    let line2Parts = [];
-    if (age) line2Parts.push(age);
-    line2Parts.push(_causePhrase(cause));
-    return `<div class="obit-entry">
-      <div class="obit-name">${_escHtml(line1)}</div>
-      <div class="obit-detail">${_escHtml(line2Parts.join(' · '))}</div>
+  const panel = document.getElementById('obituary-panel');
+  if (!panel) return;
+
+  const totalDeaths = state.entries.length;
+
+  // Compute era (Vol.) from the highest generation seen, clamped to roman numeral range
+  const maxGen = state.entries.reduce((m, e) => Math.max(m, e.generation || 0), 0);
+  const vol = _toRoman(Math.max(1, maxGen));
+
+  // Edition line — no. is the total death count
+  const editionLine = `Vol. ${vol} &middot; No. ${totalDeaths}`;
+
+  // Masthead HTML (replaces obit-header text via DOM; we rebuild everything below)
+  const mastheadHtml = `
+    <div class="gazette-masthead">
+      <div class="gazette-title">The Swamp Gazette</div>
+      <div class="gazette-edition">${editionLine}</div>
     </div>`;
-  }).join('');
+
+  // Entries
+  let bodyHtml = '';
+
+  if (totalDeaths === 0) {
+    bodyHtml = `<div class="gazette-empty">No news from the bayou. Yet.</div>`;
+  } else {
+    const FULL_COUNT = 5; // first N get the full obit treatment
+
+    bodyHtml = '<div class="gazette-section-label">Obituaries</div>';
+
+    state.entries.forEach((e, idx) => {
+      const name  = (e.name || `Unnamed ${e.stage || 'gator'}`).toUpperCase();
+      const age   = e.age != null ? e.age : '?';
+      const cause = e.cause || 'unknown';
+      const phrase = _causePhrase(cause);
+      const dateStamp = _relativeDate(e.deathTime);
+
+      if (idx < FULL_COUNT) {
+        // Full obituary treatment
+        const ageDesc = e.sex && e.sex !== 'unknown'
+          ? `${age} days. ${e.sex === 'female' ? 'She' : 'He'} ${_genDesc(e)}.`
+          : `${age} days.`;
+        bodyHtml += `
+          <div class="gazette-entry gazette-entry-full${idx > 0 ? ' gazette-entry-ruled' : ''}">
+            <div class="gazette-entry-header">
+              <span class="gazette-entry-name">${_escHtml(name)}</span>
+            </div>
+            <div class="gazette-entry-lede">${_escHtml(name)}, ${_escHtml(ageDesc)}</div>
+            <div class="gazette-entry-cause">${_escHtml(phrase)}</div>
+            <div class="gazette-entry-date">${_escHtml(dateStamp)}</div>
+          </div>`;
+      } else {
+        // Classified-ad treatment for older entries
+        if (idx === FULL_COUNT) {
+          bodyHtml += `<div class="gazette-classifieds-header">&#xB7;&#xB7;&#xB7; Earlier Notices &#xB7;&#xB7;&#xB7;</div>`;
+        }
+        const opacity = Math.max(0.35, 1 - (idx - FULL_COUNT) * 0.07);
+        bodyHtml += `
+          <div class="gazette-entry gazette-entry-classified" style="opacity:${opacity.toFixed(2)}">
+            <span class="gazette-classified-name">${_escHtml(name)}</span>
+            <span class="gazette-classified-dot"> &middot; </span>
+            <span class="gazette-classified-age">${_escHtml(String(age))} days</span>
+            <span class="gazette-classified-dot"> &middot; </span>
+            <span class="gazette-classified-cause">${_escHtml(_causeShort(cause))}</span>
+          </div>`;
+      }
+    });
+  }
+
+  panel.innerHTML = `
+    ${mastheadHtml}
+    <div class="gazette-body">
+      ${bodyHtml}
+    </div>`;
 }
 
-function _causePhrase(cause) {
+// Short cause for classified-ad lines
+function _causeShort(cause) {
   switch (cause) {
     case 'old age':    return 'old age';
-    case 'heron':      return 'taken by heron';
-    case 'chupacabra': return 'fell to chupacabra';
-    case 'sasquatch':  return 'fell to sasquatch';
-    case 'lightning':  return 'struck by lightning';
-    case 'fire':       return 'lost to fire';
-    case 'tornado':    return 'swept away';
-    case 'hurricane':  return 'lost to hurricane';
-    case 'ufo':        return 'abducted';
-    case 'alien':      return 'vaporized';
-    case 'hunter':     return 'taken by hunters';
-    case 'fight':      return 'fell in a fight';
-    case 'starvation': return 'starved';
+    case 'heron':      return 'heron';
+    case 'chupacabra': return 'chupacabra';
+    case 'sasquatch':  return 'sasquatch';
+    case 'lightning':  return 'lightning';
+    case 'fire':       return 'fire';
+    case 'tornado':    return 'tornado';
+    case 'hurricane':  return 'hurricane';
+    case 'ufo':        return 'ufo';
+    case 'alien':      return 'alien';
+    case 'hunter':     return 'hunters';
+    case 'fight':      return 'territorial dispute';
+    case 'starvation': return 'starvation';
     default:           return cause;
   }
+}
+
+// Newspaper-prose cause phrases (full entries)
+function _causePhrase(cause) {
+  switch (cause) {
+    case 'old age':    return 'Old age finally caught them.';
+    case 'heron':      return 'Taken by heron at the shallows.';
+    case 'lightning':  return 'Struck down in a bright moment.';
+    case 'fire':       return 'Lost to the flame.';
+    case 'tornado':    return 'The wind has them now.';
+    case 'hurricane':  return 'Carried off by the storm.';
+    case 'ufo':        return 'Witnesses report a beam of light.';
+    case 'alien':      return 'Vaporized. Investigators are baffled.';
+    case 'hunter':     return 'Shot by a man with a gun.';
+    case 'fight':      return 'Killed in a territorial dispute.';
+    case 'starvation': return 'Died of hunger. The bayou provides nothing.';
+    case 'chupacabra': return 'Drained. The myth persists.';
+    case 'sasquatch':  return 'Crushed. Tracks confirm the rumor.';
+    default:           return 'Cause unknown. The swamp keeps its secrets.';
+  }
+}
+
+// Generation descriptor phrase for full entries
+function _genDesc(e) {
+  const gen = e.generation || 0;
+  if (gen === 0) return 'lived in the first era';
+  if (gen === 1) return 'was of the first generation';
+  return `was of generation ${gen}`;
+}
+
+// Relative date stamp from deathTime (game sim-seconds, not wall-clock ms)
+// deathTime is simTime (seconds of sim elapsed); we treat it as sim-time only.
+// Since we don't have real wall-clock context here, we compare entries by index
+// (entry 0 = most recent) and show "today", "yesterday", or "X days ago" by
+// comparing deathTime deltas at ~86400 sim-seconds per day.
+function _relativeDate(deathTime) {
+  if (!deathTime && deathTime !== 0) return '';
+  const SIM_DAY = 86400; // sim-seconds per swamp day
+  // We'd need "now" to compute relative time. Use Date.now() as wall-clock isn't
+  // meaningful here, so we store deathTime as sim-seconds and compare to nothing.
+  // Best approximation: deathTime within last day = "today", etc.
+  // Since we can't access simTime here, just show the sim-day number.
+  const simDay = Math.floor(deathTime / SIM_DAY);
+  if (simDay <= 0) return 'early days';
+  return `day ${simDay}`;
+}
+
+// Convert integer to Roman numeral
+function _toRoman(n) {
+  if (n <= 0) return 'I';
+  const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
+  const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+  let result = '';
+  for (let i = 0; i < vals.length; i++) {
+    while (n >= vals[i]) { result += syms[i]; n -= vals[i]; }
+  }
+  return result;
 }
 
 function _escHtml(s) {

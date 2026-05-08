@@ -35,7 +35,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🐊</text></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%230a0a12' width='180' height='180'/><text x='90' y='140' font-size='140' text-anchor='middle'>🐊</text></svg>">
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260507-wave2">
 
   <!-- JSON-LD: schema.org CreativeWork for richer search previews -->
   <script type="application/ld+json">
@@ -55,6 +55,16 @@
   <div id="title-screen" class="title-overlay hidden" role="dialog" aria-labelledby="title-heading">
     <div class="title-vignette title-vignette-top"></div>
     <div class="title-vignette title-vignette-bottom"></div>
+
+    <!-- Background decoration dots — low-opacity party stickers -->
+    <div class="title-dot title-dot-1" aria-hidden="true"></div>
+    <div class="title-dot title-dot-2" aria-hidden="true"></div>
+    <div class="title-dot title-dot-3" aria-hidden="true"></div>
+    <div class="title-dot title-dot-4" aria-hidden="true"></div>
+    <div class="title-dot title-dot-5" aria-hidden="true"></div>
+    <div class="title-dot title-dot-6" aria-hidden="true"></div>
+    <div class="title-dot title-dot-7" aria-hidden="true"></div>
+    <div class="title-dot title-dot-8" aria-hidden="true"></div>
 
     <div class="title-inner">
       <div class="title-header">
@@ -119,6 +129,10 @@
 
   <div id="founding-pair" class="bge-overlay hidden" role="dialog" aria-labelledby="founding-title">
     <div class="bge-card">
+      <!-- corner doodle: sparkle -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 L13.5 10 L21 12 L13.5 14 L12 22 L10.5 14 L3 12 L10.5 10 Z" fill="#ddaa30" opacity="0.75"/>
+      </svg>
       <h2 id="founding-title">your founders</h2>
       <div id="founding-dynasty-name"></div>
       <div id="founding-pair-grid"></div>
@@ -131,6 +145,10 @@
 
   <div id="game-over" class="bge-overlay hidden" role="dialog" aria-labelledby="game-over-title">
     <div class="bge-card">
+      <!-- corner doodle: squiggle -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 32 16" width="32" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 8 Q6 2 10 8 Q14 14 18 8 Q22 2 26 8 Q30 14 32 8" stroke="#44a8b4" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+      </svg>
       <h2 id="game-over-title">the bloodline is gone</h2>
       <div id="game-over-stats"></div>
       <div class="bge-row">
@@ -142,6 +160,15 @@
   </div>
   <div id="unlocks-shop" class="bge-overlay hidden" role="dialog" aria-labelledby="unlocks-shop-title" aria-modal="true">
     <div class="bge-card unlocks-card">
+      <!-- corner doodle: tiny gator eye -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 24 18" width="24" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="12" cy="10" rx="10" ry="7" fill="#2a4a2e" opacity="0.8"/>
+        <ellipse cx="12" cy="10" rx="10" ry="7" stroke="#6aaa5a" stroke-width="1.5" opacity="0.6"/>
+        <ellipse cx="12" cy="10" rx="4" ry="6" fill="#1a0a06" opacity="0.9"/>
+        <ellipse cx="10.5" cy="8" rx="1.5" ry="1.5" fill="#ffffff" opacity="0.5"/>
+        <!-- little brow bumps -->
+        <path d="M4 5 Q8 2 12 4 Q16 2 20 5" stroke="#6aaa5a" stroke-width="1.2" stroke-linecap="round" opacity="0.5" fill="none"/>
+      </svg>
       <h2 id="unlocks-shop-title">vault</h2>
       <div class="unlocks-balance" id="unlocks-balance">0 lineage points</div>
       <div class="unlocks-list" id="unlocks-list"></div>
@@ -165,6 +192,12 @@
   <!-- First-dynasty intro tutorial (shown once, after founders commit) -->
   <div id="intro-tutorial" class="bge-overlay hidden" role="dialog" aria-labelledby="intro-card-header" aria-modal="true">
     <div class="bge-card intro-tutorial-card">
+      <!-- corner doodle: mustard squiggle dots -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 28 10" width="28" height="10" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="4"  cy="5" r="3" fill="#ddaa30" opacity="0.75"/>
+        <circle cx="14" cy="5" r="3" fill="#ddaa30" opacity="0.55"/>
+        <circle cx="24" cy="5" r="3" fill="#ddaa30" opacity="0.35"/>
+      </svg>
       <div class="intro-card-content">
         <div class="intro-card-header" id="intro-card-header"></div>
         <div class="intro-card-body"></div>
@@ -203,17 +236,28 @@
   <!-- Hover tooltip (dynasty mode) -->
   <div id="hover-tooltip" class="hover-tooltip hidden" aria-hidden="true"></div>
 
-  <!-- Obituary toggle button + side panel -->
-  <button type="button" id="obituary-toggle" aria-label="Toggle obituary log" aria-expanded="false" aria-controls="obituary-panel">log</button>
-  <aside id="obituary-panel" class="hidden" role="complementary" aria-label="Obituary log">
-    <div class="obit-header">obituary</div>
-    <div id="obituary-list" class="obit-list"></div>
+  <!-- Gazette toggle button + side panel -->
+  <button type="button" id="obituary-toggle" aria-label="Toggle The Swamp Gazette" aria-expanded="false" aria-controls="obituary-panel">Gazette</button>
+  <aside id="obituary-panel" class="hidden" role="complementary" aria-label="The Swamp Gazette">
+    <!-- populated by renderObituaryPanel in obituary.js -->
   </aside>
 
   <!-- Family tree toggle + overlay (dynasty mode only) -->
   <button type="button" id="family-tree-toggle" class="hidden" aria-label="Open family tree" aria-controls="family-tree-overlay">family</button>
   <div id="family-tree-overlay" class="bge-overlay hidden" role="dialog" aria-labelledby="family-tree-title" aria-modal="true">
     <div class="bge-card family-tree-card">
+      <!-- corner doodle: coral sparkle -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 20 20" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="3" fill="#cc6644" opacity="0.8"/>
+        <line x1="10" y1="1" x2="10" y2="5"  stroke="#cc6644" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="10" y1="15" x2="10" y2="19" stroke="#cc6644" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="1"  y1="10" x2="5"  y2="10" stroke="#cc6644" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="15" y1="10" x2="19" y2="10" stroke="#cc6644" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="3.5" y1="3.5" x2="6.5" y2="6.5"   stroke="#cc6644" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <line x1="13.5" y1="13.5" x2="16.5" y2="16.5" stroke="#cc6644" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <line x1="16.5" y1="3.5" x2="13.5" y2="6.5"  stroke="#cc6644" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <line x1="6.5" y1="13.5" x2="3.5" y2="16.5"  stroke="#cc6644" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+      </svg>
       <div class="family-tree-header">
         <h2 id="family-tree-title">family</h2>
         <div id="family-tree-stats"></div>
@@ -238,6 +282,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260507-wave1"></script>
+  <script type="module" src="js/main.js?v=20260507-wave2"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@
 
 import { distance } from '../utils/math.js';
 import { playTailSlap, playBellow, playGrowl, playMate } from '../audio.js';
+import { spawnTailSlapSplash, spawnBellowRings, spawnBellowDust } from '../game/particles.js';
 
 // Wildlife the player cannot hunt (flying, intangible, dangerous vehicles)
 const NON_EDIBLE_WILDLIFE = new Set([
@@ -34,14 +35,14 @@ let _holdClientY = 0;
 let _holdActive = false;
 const HOLD_DURATION = 0.8; // seconds
 
-// Tail-slap particle burst — green splash chips
+// Tail-slap particle burst — bigger green swamp splash + water droplets
 function splatTailSlap(x, y) {
-  if (!_spawnDeathParticles) return;
-  for (let i = 0; i < 5; i++) {
-    _spawnDeathParticles({ deathParticles: _particles.deathParticles }, x + (Math.random() - 0.5) * 8, y, '#5aaa3a');
+  if (_particles) {
+    spawnTailSlapSplash(_particles, x, y);
   }
   if (_addRipple && _particles) {
     _addRipple(_particles, x, y, 10, 0.6);
+    _addRipple(_particles, x, y, 6, 0.4);
   }
   if (_playSplash) _playSplash(0.4);
   playTailSlap();
@@ -246,9 +247,20 @@ export function dispatchHold(canvasX, canvasY) {
   const player = getPlayerGator();
   if (!player) return;
 
-  // Bellow — radial expanding ripple
+  // Bellow — expanding rings or land dust
   const midX = player.tr.x + (player.gator.spriteW || 10) / 2;
   const midY = player.tr.y + (player.gator.spriteH || 5) / 2;
+  const onLand = !player.gator.inWater;
+
+  if (_particles) {
+    if (onLand) {
+      // Land bellow: dust puffs instead of water rings
+      spawnBellowDust(_particles, midX, midY);
+    } else {
+      // Water bellow: 3 concentric green expanding rings
+      spawnBellowRings(_particles, midX, midY);
+    }
+  }
   if (_addRipple && _particles) {
     _addRipple(_particles, midX, midY, 30, 0.8);
     _addRipple(_particles, midX, midY, 20, 0.5);

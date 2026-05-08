@@ -7,6 +7,8 @@ export function createParticleState() {
     deathParticles: [],
     ambientParticles: [],
     ripples: [],
+    bellowRings: [],
+    vignettePulse: 0,   // seconds remaining; renders red edge vignette when > 0
     gatorRippleTimer: 0,
   };
 }
@@ -43,9 +45,180 @@ export function renderDeathParticles(ctx, state) {
     const alpha = Math.min(1, p.life * 2);
     ctx.fillStyle = p.color;
     ctx.globalAlpha = alpha;
-    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 1);
+    const sz = p.size || 1;
+    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), sz, sz);
   }
   ctx.globalAlpha = 1;
+}
+
+// --- Bigger Tail-Slap Splash ---
+// Replaces the 5-particle plain splash with 10-14 green swamp chips + water droplets.
+
+export function spawnTailSlapSplash(state, x, y) {
+  if (state.deathParticles.length > 60) return;
+  const count = 10 + Math.floor(Math.random() * 5); // 10-14
+  const swampPalette = ['#5aaa3a', '#4a9a2e', '#6aba4a', '#3a8a22'];
+  for (let i = 0; i < count; i++) {
+    const color = swampPalette[Math.floor(Math.random() * swampPalette.length)];
+    const size = Math.random() < 0.35 ? 2 : 1; // occasional 2px chip
+    state.deathParticles.push({
+      x: x + (Math.random() - 0.5) * 14,
+      y,
+      vx: (Math.random() - 0.5) * 28,
+      vy: -Math.random() * 20 - 5,
+      life: 0.55 + Math.random() * 0.8,
+      color,
+      size,
+    });
+  }
+  // 4-6 white/light water-droplet specks that arc upward
+  const dropCount = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < dropCount; i++) {
+    state.deathParticles.push({
+      x: x + (Math.random() - 0.5) * 10,
+      y,
+      vx: (Math.random() - 0.5) * 22,
+      vy: -Math.random() * 25 - 8,
+      life: 0.4 + Math.random() * 0.5,
+      color: Math.random() < 0.5 ? '#c8f0d8' : '#a8e0c0',
+      size: 1,
+    });
+  }
+}
+
+// --- Bellow Rings ---
+// 3 concentric green rings that expand and fade over ~1s.
+
+export function spawnBellowRings(state, x, y) {
+  if (state.bellowRings.length > 12) return;
+  for (let i = 0; i < 3; i++) {
+    state.bellowRings.push({
+      x, y,
+      radius: 4,
+      maxRadius: 35,
+      life: 1.0,
+      maxLife: 1.0,
+      delay: i * 0.12, // stagger the rings slightly
+    });
+  }
+}
+
+export function updateBellowRings(state, dt) {
+  for (let i = state.bellowRings.length - 1; i >= 0; i--) {
+    const r = state.bellowRings[i];
+    if (r.delay > 0) {
+      r.delay -= dt;
+      continue;
+    }
+    r.life -= dt;
+    const progress = 1 - r.life / r.maxLife; // 0→1
+    r.radius = 4 + progress * (r.maxRadius - 4);
+    if (r.life <= 0) {
+      state.bellowRings.splice(i, 1);
+    }
+  }
+}
+
+export function renderBellowRings(ctx, state) {
+  for (const r of state.bellowRings) {
+    if (r.delay > 0) continue;
+    const alpha = r.life / r.maxLife; // 1→0
+    const steps = Math.max(6, Math.floor(r.radius * 3));
+    ctx.fillStyle = `rgba(120, 220, 100, ${alpha * 0.75})`;
+    for (let a = 0; a < steps; a++) {
+      const angle = (a / steps) * Math.PI * 2;
+      const px = Math.floor(r.x + Math.cos(angle) * r.radius);
+      const py = Math.floor(r.y + Math.sin(angle) * r.radius * 0.55); // flatten for water-surface look
+      ctx.fillRect(px, py, 1, 1);
+    }
+  }
+}
+
+// --- Land Bellow Dust ---
+// Puffs of swamp grit when bellowing on land.
+
+export function spawnBellowDust(state, x, y) {
+  if (state.deathParticles.length > 60) return;
+  const dustPalette = ['#8a7a5a', '#7a6a4a', '#aa9a7a', '#9a8a6a'];
+  const count = 5 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < count; i++) {
+    const color = dustPalette[Math.floor(Math.random() * dustPalette.length)];
+    state.deathParticles.push({
+      x: x + (Math.random() - 0.5) * 10,
+      y,
+      vx: (Math.random() - 0.5) * 18,
+      vy: -Math.random() * 10 - 2,
+      life: 0.4 + Math.random() * 0.5,
+      color,
+      size: 1,
+    });
+  }
+}
+
+// --- Player Kill Blood Spurt ---
+// 4-6 dark red particles + 3-4 brighter accent particles.
+
+export function spawnKillBlood(state, x, y) {
+  if (state.deathParticles.length > 60) return;
+  // Dark base splatter
+  const darkCount = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < darkCount; i++) {
+    state.deathParticles.push({
+      x: x + (Math.random() - 0.5) * 6,
+      y,
+      vx: (Math.random() - 0.5) * 18,
+      vy: -Math.random() * 12 - 2,
+      life: 0.5 + Math.random() * 0.5,
+      color: '#882222',
+      size: 1,
+    });
+  }
+  // Brighter accent particles
+  const brightCount = 3 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < brightCount; i++) {
+    state.deathParticles.push({
+      x: x + (Math.random() - 0.5) * 8,
+      y,
+      vx: (Math.random() - 0.5) * 24,
+      vy: -Math.random() * 18 - 4,
+      life: 0.35 + Math.random() * 0.4,
+      color: '#cc4444',
+      size: 1,
+    });
+  }
+}
+
+// --- Vignette Pulse ---
+// Marks the particle state so render.js can draw a dark-red edge vignette.
+
+export function triggerVignettePulse(state, duration) {
+  // Extend if already pulsing
+  state.vignettePulse = Math.max(state.vignettePulse || 0, duration || 1.0);
+}
+
+export function updateVignettePulse(state, dt) {
+  if (state.vignettePulse > 0) {
+    state.vignettePulse -= dt;
+    if (state.vignettePulse < 0) state.vignettePulse = 0;
+  }
+}
+
+// Render: radial red vignette from edges inward — subtle, 1s fade.
+// canvasW, canvasH from caller.
+export function renderVignettePulse(ctx, state, canvasW, canvasH) {
+  if (!state.vignettePulse || state.vignettePulse <= 0) return;
+  // Peak at >0.7s remaining, fade over last 0.7s
+  const alpha = Math.min(1, state.vignettePulse / 0.7) * 0.22;
+  if (alpha <= 0.005) return;
+
+  // Top band
+  ctx.fillStyle = `rgba(180, 30, 30, ${alpha})`;
+  const edgeW = Math.floor(canvasW * 0.18);
+  const edgeH = Math.floor(canvasH * 0.18);
+  ctx.fillRect(0, 0, canvasW, edgeH);
+  ctx.fillRect(0, canvasH - edgeH, canvasW, edgeH);
+  ctx.fillRect(0, 0, edgeW, canvasH);
+  ctx.fillRect(canvasW - edgeW, 0, edgeW, canvasH);
 }
 
 // --- Ambient Particles ---
