@@ -22,7 +22,7 @@ import { initInspector, openInspectorAt, openInspectorForGator, closeInspector }
 import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls, isStartInEra2, getStartMealCount, getLegacyRenownMultiplier } from './game/unlocks.js';
 import { loadObituary, updateMoments, renderMoments, renderObituaryPanel, addMoment } from './game/obituary.js';
 import { attachLineage } from './game/dynasty.js';
-import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
+import { buildTree, computeTreeLayout, getLivingSuccessors, setPlayerGator, setHeirGator, clearHeirGator } from './systems/lineage.js';
 import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife, hoverState } from './systems/playerControl.js';
 import { createGoalState, loadGoals, saveGoals, updateGoals, activeGoal } from './game/goals.js';
 import {
@@ -702,6 +702,20 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
       if (best) {
         best.gator.isPlayer = true;
         dynasty.playerGatorId = best.id;
+      }
+    }
+
+    // Validate saved heirGatorId — ECS ids regenerate on load, so the saved id
+    // may point at a different gator or nothing. Accept it only if it resolves to
+    // a living non-egg bloodline gator that is not the current player.
+    if (dynasty.heirGatorId) {
+      const hg = world.get(dynasty.heirGatorId, 'gator');
+      const hLinId = hg ? (hg.lineage?.dynastyId || hg.lineageId) : null;
+      const hValid = hg && hg.stage !== 'egg' && hLinId === dynasty.id && !hg.isPlayer;
+      if (hValid) {
+        hg.isHeir = true; // restore the flag on the live component
+      } else {
+        dynasty.heirGatorId = null; // stale — clear silently
       }
     }
   }
@@ -2062,10 +2076,14 @@ function renderTreeNode(node, mode) {
   wrap.className = 'family-tree-node';
   if (!node.alive) wrap.classList.add('is-dead');
   if (node.gator?.isPlayer) wrap.classList.add('is-player');
+  if (node.gator?.isHeir) wrap.classList.add('is-heir');
+
+  const isDesignatedHeir = dynasty && node.id === dynasty.heirGatorId;
 
   const name = document.createElement('div');
   name.className = 'family-tree-name';
-  name.textContent = node.name;
+  // Prefix crown glyph in the name if this is the designated heir
+  name.textContent = isDesignatedHeir ? `♚ ${node.name}` : node.name;
   wrap.appendChild(name);
 
   const meta = document.createElement('div');
@@ -2093,7 +2111,36 @@ function renderTreeNode(node, mode) {
     };
     wrap.appendChild(becomeBtn);
   } else if (mode === 'browse') {
-    wrap.onclick = () => {
+    // Heir designation buttons — only for living, non-egg, non-player bloodline gators
+    if (node.alive && node.gator && node.gator.stage !== 'egg' && !node.gator.isPlayer && dynasty) {
+      if (isDesignatedHeir) {
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'family-tree-heir-btn family-tree-heir-btn--clear';
+        clearBtn.textContent = 'clear heir';
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          clearHeirGator(world, dynasty);
+          showFamilyTree('browse'); // re-render to update all cards
+        };
+        wrap.appendChild(clearBtn);
+      } else {
+        const heirBtn = document.createElement('button');
+        heirBtn.type = 'button';
+        heirBtn.className = 'family-tree-heir-btn';
+        heirBtn.textContent = 'make heir';
+        heirBtn.onclick = (e) => {
+          e.stopPropagation();
+          setHeirGator(world, node.id, dynasty);
+          showFamilyTree('browse'); // re-render to update all cards
+        };
+        wrap.appendChild(heirBtn);
+      }
+    }
+
+    wrap.onclick = (e) => {
+      // Don't trigger inspector when clicking heir buttons
+      if (e.target.classList.contains('family-tree-heir-btn')) return;
       // Open inspector for the node's gator if alive
       if (node.alive && node.gator) {
         closeFamilyTree();
@@ -2103,6 +2150,220 @@ function renderTreeNode(node, mode) {
   }
 
   return wrap;
+}
+
+// --- SVG hierarchical tree renderer (pan + zoom) ---
+
+let _treeTransform = { x: 0, y: 0, scale: 1 };
+let _treeSvgGroup = null;
+
+function _applyTreeTransform() {
+  if (!_treeSvgGroup) return;
+  _treeSvgGroup.setAttribute('transform',
+    `translate(${_treeTransform.x},${_treeTransform.y}) scale(${_treeTransform.scale})`);
+}
+
+function _attachPanZoom(svgEl) {
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+
+  svgEl.addEventListener('mousedown', (e) => {
+    if (e.target.closest && e.target.closest('.family-tree-node')) return;
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    svgEl.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    _treeTransform.x += e.clientX - lastX;
+    _treeTransform.y += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    _applyTreeTransform();
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragging) { dragging = false; svgEl.style.cursor = 'grab'; }
+  });
+
+  svgEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = svgEl.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.2, Math.min(3, _treeTransform.scale * factor));
+    _treeTransform.x = px + (_treeTransform.x - px) * (newScale / _treeTransform.scale);
+    _treeTransform.y = py + (_treeTransform.y - py) * (newScale / _treeTransform.scale);
+    _treeTransform.scale = newScale;
+    _applyTreeTransform();
+  }, { passive: false });
+
+  let lastTouches = [];
+  let lastPinchDist = 0;
+  svgEl.addEventListener('touchstart', (e) => {
+    lastTouches = Array.from(e.touches);
+    if (lastTouches.length === 1) {
+      lastX = lastTouches[0].clientX;
+      lastY = lastTouches[0].clientY;
+    } else if (lastTouches.length === 2) {
+      const dx = lastTouches[0].clientX - lastTouches[1].clientX;
+      const dy = lastTouches[0].clientY - lastTouches[1].clientY;
+      lastPinchDist = Math.hypot(dx, dy);
+    }
+    e.preventDefault();
+  }, { passive: false });
+  svgEl.addEventListener('touchmove', (e) => {
+    const t = Array.from(e.touches);
+    if (t.length === 1) {
+      _treeTransform.x += t[0].clientX - lastX;
+      _treeTransform.y += t[0].clientY - lastY;
+      lastX = t[0].clientX;
+      lastY = t[0].clientY;
+      _applyTreeTransform();
+    } else if (t.length === 2) {
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastPinchDist > 0) {
+        const factor = dist / lastPinchDist;
+        const rect = svgEl.getBoundingClientRect();
+        const px = (t[0].clientX + t[1].clientX) / 2 - rect.left;
+        const py = (t[0].clientY + t[1].clientY) / 2 - rect.top;
+        const newScale = Math.max(0.2, Math.min(3, _treeTransform.scale * factor));
+        _treeTransform.x = px + (_treeTransform.x - px) * (newScale / _treeTransform.scale);
+        _treeTransform.y = py + (_treeTransform.y - py) * (newScale / _treeTransform.scale);
+        _treeTransform.scale = newScale;
+        _applyTreeTransform();
+      }
+      lastPinchDist = dist;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  svgEl.addEventListener('touchend', () => { lastPinchDist = 0; });
+}
+
+function _buildTreeSvg(layout, mode) {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+  const { nodeLayout, svgWidth, svgHeight, generations, nodeW, nodeH } = layout;
+
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('width', svgWidth);
+  svg.setAttribute('height', svgHeight);
+  svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+  svg.classList.add('family-tree-svg');
+  svg.style.cursor = 'grab';
+  svg.style.display = 'block';
+  svg.style.overflow = 'visible';
+
+  const g = document.createElementNS(SVG_NS, 'g');
+  svg.appendChild(g);
+  _treeSvgGroup = g;
+
+  const allNodes = generations.flat();
+
+  // Connector lines rendered before nodes (appear behind)
+  for (const node of allNodes) {
+    const childLayout = nodeLayout.get(node.id);
+    if (!childLayout) continue;
+    const { motherId, fatherId } = node.lineage || {};
+
+    for (const parentId of [motherId, fatherId]) {
+      if (!parentId) continue;
+      const parentLayout = nodeLayout.get(parentId);
+      if (!parentLayout) continue;
+
+      const parentNode = allNodes.find(n => n.id === parentId);
+      const bothAlive = node.alive && parentNode?.alive;
+      const lineColor = bothAlive ? '#3a5a3e' : '#6a6a6a';
+      const lineOpacity = bothAlive ? '0.85' : '0.4';
+
+      // Elbow connector: child top-center → mid-y horizontal → parent bottom-center
+      const x1 = childLayout.cx;
+      const y1 = childLayout.y;
+      const x2 = parentLayout.cx;
+      const y2 = parentLayout.y + nodeH;
+      const midY = (y1 + y2) / 2;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`);
+      path.setAttribute('stroke', lineColor);
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('opacity', lineOpacity);
+      g.appendChild(path);
+    }
+  }
+
+  // Generation labels + node cards
+  for (let gi = 0; gi < generations.length; gi++) {
+    const gen = generations[gi];
+    if (gen.length === 0) continue;
+
+    const firstLayout = nodeLayout.get(gen[0].id);
+    if (firstLayout) {
+      const label = document.createElementNS(SVG_NS, 'text');
+      label.setAttribute('x', firstLayout.x);
+      label.setAttribute('y', firstLayout.y - 8);
+      label.setAttribute('fill', '#4a6a4a');
+      label.setAttribute('font-size', '9');
+      label.setAttribute('font-family', "Menlo, Monaco, 'Courier New', monospace");
+      label.setAttribute('letter-spacing', '3');
+      label.textContent = gi === 0 ? 'founders' : `generation ${gi}`;
+      g.appendChild(label);
+    }
+
+    for (const node of gen) {
+      const nl = nodeLayout.get(node.id);
+      if (!nl) continue;
+
+      const fo = document.createElementNS(SVG_NS, 'foreignObject');
+      fo.setAttribute('x', nl.x);
+      fo.setAttribute('y', nl.y);
+      fo.setAttribute('width', nodeW);
+      fo.setAttribute('height', nodeH);
+
+      const wrapper = document.createElementNS(XHTML_NS, 'div');
+      wrapper.setAttribute('xmlns', XHTML_NS);
+      wrapper.style.cssText = `width:${nodeW}px;height:${nodeH}px;display:flex;align-items:stretch;`;
+
+      const nodeEl = renderTreeNode(node, mode);
+      nodeEl.style.cssText += `;width:${nodeW}px;min-width:unset;box-sizing:border-box;flex:1;`;
+      wrapper.appendChild(nodeEl);
+      fo.appendChild(wrapper);
+      g.appendChild(fo);
+    }
+  }
+
+  return svg;
+}
+
+function _centerTree(layout) {
+  const { nodeLayout, svgWidth, svgHeight, generations } = layout;
+  const containerEl = familyTreeBody;
+  if (!containerEl) return;
+  const cw = containerEl.clientWidth || 600;
+  const ch = containerEl.clientHeight || 400;
+
+  let targetLayout = null;
+  outer: for (const gen of generations) {
+    for (const node of gen) {
+      if (node.gator?.isPlayer) { targetLayout = nodeLayout.get(node.id); break outer; }
+    }
+  }
+
+  if (targetLayout) {
+    _treeTransform.x = cw / 2 - targetLayout.cx;
+    _treeTransform.y = Math.max(20, ch / 3 - targetLayout.cy);
+  } else {
+    _treeTransform.x = (cw - svgWidth) / 2;
+    _treeTransform.y = Math.max(20, (ch - svgHeight) / 2);
+  }
+  _treeTransform.scale = 1;
 }
 
 function showFamilyTree(mode = 'browse') {
@@ -2118,6 +2379,7 @@ function showFamilyTree(mode = 'browse') {
   }
 
   familyTreeBody.innerHTML = '';
+
   if (mode === 'succession') {
     const banner = document.createElement('div');
     banner.className = 'family-tree-mode-label';
@@ -2131,20 +2393,32 @@ function showFamilyTree(mode = 'browse') {
     empty.textContent = 'no record yet';
     familyTreeBody.appendChild(empty);
   } else {
-    tree.forEach((gen, i) => {
-      const genWrap = document.createElement('div');
-      genWrap.className = 'family-tree-gen';
-      const genLabel = document.createElement('div');
-      genLabel.className = 'family-tree-gen-label';
-      genLabel.textContent = i === 0 ? 'founders' : `generation ${i}`;
-      genWrap.appendChild(genLabel);
-      const row = document.createElement('div');
-      row.className = 'family-tree-row';
-      gen.sort((a, b) => (b.alive ? 1 : 0) - (a.alive ? 1 : 0));
-      for (const node of gen) row.appendChild(renderTreeNode(node, mode));
-      genWrap.appendChild(row);
-      familyTreeBody.appendChild(genWrap);
+    // Succession cards are taller to accommodate the "become" button
+    const cardH = mode === 'succession' ? 96 : 70;
+    const layout = computeTreeLayout(tree, { nodeW: 90, nodeH: cardH, colGap: 20, rowGap: 70 });
+
+    _treeTransform = { x: 0, y: 0, scale: 1 };
+
+    const svgWrap = document.createElement('div');
+    svgWrap.className = 'family-tree-svg-wrap';
+    const svg = _buildTreeSvg(layout, mode);
+    svgWrap.appendChild(svg);
+    familyTreeBody.appendChild(svgWrap);
+
+    _treeSvgGroup = svg.querySelector('g');
+    _attachPanZoom(svg);
+
+    requestAnimationFrame(() => {
+      _centerTree(layout);
+      _applyTreeTransform();
     });
+
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'family-tree-reset-btn';
+    resetBtn.textContent = 'reset view';
+    resetBtn.onclick = () => { _centerTree(layout); _applyTreeTransform(); };
+    familyTreeBody.appendChild(resetBtn);
   }
 
   familyTreeOverlay.classList.remove('hidden');
@@ -2385,6 +2659,164 @@ document.addEventListener('click', (e) => {
     obituaryToggle.setAttribute('aria-expanded', 'false');
   }
 });
+
+// --- Mobile swipe-to-dismiss gestures ---
+// Only wire up on touch devices to avoid any interference with mouse interactions.
+if (isTouchDevice) {
+  const SWIPE_THRESHOLD = 60; // px delta to trigger dismiss
+
+  // Helper: close obituary panel + sync aria
+  function closeObituaryPanel() {
+    if (!obituaryPanel || obituaryPanel.classList.contains('hidden')) return;
+    obituaryPanel.classList.add('hidden');
+    if (obituaryToggle) obituaryToggle.setAttribute('aria-expanded', 'false');
+  }
+
+  // --- Swipe-right to close Gazette panel ---
+  // The panel slides in from the right; swipe right = dismiss.
+  (function wireGazetteSwipe() {
+    if (!obituaryPanel) return;
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+
+    obituaryPanel.addEventListener('touchstart', (e) => {
+      if (obituaryPanel.classList.contains('hidden')) return;
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      active = true;
+      obituaryPanel.classList.add('swiping');
+    }, { passive: true });
+
+    obituaryPanel.addEventListener('touchmove', (e) => {
+      if (!active) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = Math.abs(t.clientY - startY);
+      // Only track horizontal-dominant swipes
+      if (dy > Math.abs(dx)) return;
+      if (dx > 0) {
+        obituaryPanel.style.transform = `translateX(${dx}px)`;
+      }
+    }, { passive: true });
+
+    obituaryPanel.addEventListener('touchend', (e) => {
+      if (!active) return;
+      active = false;
+      obituaryPanel.classList.remove('swiping');
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      if (dx > SWIPE_THRESHOLD) {
+        obituaryPanel.style.transform = '';
+        closeObituaryPanel();
+      } else {
+        obituaryPanel.style.transform = '';
+      }
+    }, { passive: true });
+
+    obituaryPanel.addEventListener('touchcancel', () => {
+      active = false;
+      obituaryPanel.classList.remove('swiping');
+      obituaryPanel.style.transform = '';
+    }, { passive: true });
+  })();
+
+  // --- Swipe-down to close family-tree overlay (browse mode only) ---
+  (function wireFamilyTreeSwipe() {
+    if (!familyTreeOverlay) return;
+    let startY = 0;
+    let startX = 0;
+    let active = false;
+    const card = familyTreeOverlay.querySelector('.bge-card');
+
+    familyTreeOverlay.addEventListener('touchstart', (e) => {
+      if (familyTreeOverlay.classList.contains('hidden')) return;
+      if (familyTreeMode !== 'browse') return;
+      const t = e.touches[0];
+      startY = t.clientY;
+      startX = t.clientX;
+      active = true;
+    }, { passive: true });
+
+    familyTreeOverlay.addEventListener('touchmove', (e) => {
+      if (!active || !card) return;
+      const t = e.touches[0];
+      const dy = t.clientY - startY;
+      const dx = Math.abs(t.clientX - startX);
+      // Vertical-dominant only
+      if (dx > Math.abs(dy)) return;
+      if (dy > 0) {
+        card.style.transition = 'none';
+        card.style.transform = `translateY(${dy}px) rotate(0.5deg)`;
+      }
+    }, { passive: true });
+
+    familyTreeOverlay.addEventListener('touchend', (e) => {
+      if (!active || !card) return;
+      active = false;
+      const t = e.changedTouches[0];
+      const dy = t.clientY - startY;
+      card.style.transition = '';
+      card.style.transform = '';
+      if (dy > SWIPE_THRESHOLD && familyTreeMode === 'browse') {
+        closeFamilyTree();
+      }
+    }, { passive: true });
+
+    familyTreeOverlay.addEventListener('touchcancel', () => {
+      active = false;
+      if (card) { card.style.transition = ''; card.style.transform = ''; }
+    }, { passive: true });
+  })();
+
+  // --- Swipe-down to close inspector overlay ---
+  (function wireInspectorSwipe() {
+    const inspectorOverlay = document.getElementById('inspector-overlay');
+    if (!inspectorOverlay) return;
+    let startY = 0;
+    let startX = 0;
+    let active = false;
+    const card = inspectorOverlay.querySelector('.bge-card');
+
+    inspectorOverlay.addEventListener('touchstart', (e) => {
+      if (inspectorOverlay.classList.contains('hidden')) return;
+      const t = e.touches[0];
+      startY = t.clientY;
+      startX = t.clientX;
+      active = true;
+    }, { passive: true });
+
+    inspectorOverlay.addEventListener('touchmove', (e) => {
+      if (!active || !card) return;
+      const t = e.touches[0];
+      const dy = t.clientY - startY;
+      const dx = Math.abs(t.clientX - startX);
+      if (dx > Math.abs(dy)) return;
+      if (dy > 0) {
+        card.style.transition = 'none';
+        card.style.transform = `translateY(${dy}px) rotate(0.4deg)`;
+      }
+    }, { passive: true });
+
+    inspectorOverlay.addEventListener('touchend', (e) => {
+      if (!active || !card) return;
+      active = false;
+      const t = e.changedTouches[0];
+      const dy = t.clientY - startY;
+      card.style.transition = '';
+      card.style.transform = '';
+      if (dy > SWIPE_THRESHOLD) {
+        closeInspector();
+      }
+    }, { passive: true });
+
+    inspectorOverlay.addEventListener('touchcancel', () => {
+      active = false;
+      if (card) { card.style.transition = ''; card.style.transform = ''; }
+    }, { passive: true });
+  })();
+}
 
 // --- Unlocks Shop ---
 let shopReturnOverlay = null;
@@ -3104,11 +3536,40 @@ function gameLoop(timestamp) {
       dynasty._lastPlayerGatorName = null;
       dynasty._lastPlayerGatorSnap = null;
 
-      const successors = getLivingSuccessors(world, dynasty.id);
-      if (successors.length > 0) {
-        showDeathCutscene(deathGatorSnap, deathCause, successors);
+      // Check if a valid designated heir exists — alive, non-egg, in bloodline
+      let heirAutoSucceeded = false;
+      if (dynasty.heirGatorId) {
+        const heirGator = world.get(dynasty.heirGatorId, 'gator');
+        const heirLinId = heirGator ? (heirGator.lineage?.dynastyId || heirGator.lineageId) : null;
+        const heirValid = heirGator && heirGator.stage !== 'egg' && heirLinId === dynasty.id;
+        if (heirValid) {
+          // Auto-succession: skip the modal entirely
+          const heirName = (heirGator.name || 'the heir').toUpperCase();
+          setPlayerGator(world, dynasty.heirGatorId, dynasty);
+          dynasty.heirGatorId = null;
+          heirGator.isHeir = false;
+          setPlayerControlDynasty(dynasty);
+          if (obituaryState) {
+            addMoment(obituaryState, {
+              text: `${heirName} takes the line.`,
+              x: null, y: null, color: '#c8a832',
+            });
+          }
+          heirAutoSucceeded = true;
+        } else {
+          // Heir is no longer valid — clear it silently and fall through to modal
+          dynasty.heirGatorId = null;
+          if (heirGator) heirGator.isHeir = false;
+        }
       }
-      // If no successors, extinction check below will handle it
+
+      if (!heirAutoSucceeded) {
+        const successors = getLivingSuccessors(world, dynasty.id);
+        if (successors.length > 0) {
+          showDeathCutscene(deathGatorSnap, deathCause, successors);
+        }
+        // If no successors, extinction check below will handle it
+      }
     } else {
       // Track current gator name/snapshot so we have it if they die next frame
       dynasty._lastPlayerGatorName = pgGator.name || null;

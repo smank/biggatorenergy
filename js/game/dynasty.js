@@ -281,6 +281,16 @@ export function randomDynastyName(rng) {
   return rng.pick(roots) + ' ' + rng.pick(suffixes);
 }
 
+// Dynasty object shape (relevant fields for reference):
+//   id             — unique dynasty id
+//   name           — dynasty display name
+//   playerGatorId  — ECS id of the gator the player currently controls
+//   mateGatorId    — ECS id of the current mate gator
+//   heirGatorId    — ECS id of the proactively designated heir (null if none).
+//                    Set by setHeirGator; cleared by clearHeirGator or auto-succession.
+//                    Validated on load — if the saved id no longer resolves to a living
+//                    bloodline gator, the field is cleared automatically.
+
 // A gator belongs to the bloodline if it has a lineageId (or lineage.dynastyId) matching the dynasty.
 // Founders are marked explicitly; descendants inherit via breeding.
 export function isBloodline(gator, dynastyId) {

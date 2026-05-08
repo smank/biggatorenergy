@@ -1300,6 +1300,259 @@ body.show-rotate #start-overlay {
   transform: scale(1.06);
 }
 
+/* ============================================================
+   MOBILE POLISH — touch targets, safe area, HUD, swipe affordances
+   ============================================================ */
+
+/* 1. Larger tap targets on touch devices */
+@media (hover: none) and (pointer: coarse) {
+
+  /* Title-screen buttons */
+  .title-btn {
+    min-height: 48px;
+    padding: 16px 18px;
+  }
+  .title-info {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  .title-back {
+    min-height: 48px;
+    padding: 16px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .title-info-close {
+    min-height: 44px;
+    padding: 12px 8px;
+    display: flex;
+    align-items: center;
+    align-self: flex-end;
+  }
+
+  /* General BGE buttons */
+  .bge-btn {
+    min-height: 48px;
+    padding: 14px 16px;
+  }
+  .bge-btn-small {
+    min-height: 44px;
+  }
+
+  /* Vault/close link buttons — give them a fat touch area */
+  .bge-vault-link {
+    min-height: 44px;
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .title-vault-link {
+    min-height: 44px;
+    padding: 12px 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Buy + become buttons in vault / family tree */
+  .unlock-buy-btn {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+  .family-tree-become-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  /* Gazette + family-tree corner toggles */
+  #obituary-toggle {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+  #family-tree-toggle {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 12px;
+  }
+
+  /* Sim controls — already exist, make them clearly 44px square */
+  #sim-controls button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  /* Inspector close + save */
+  .inspector-close-btn {
+    min-height: 44px;
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    align-self: flex-end;
+  }
+  .inspector-save-btn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  /* Prevent double-tap zoom on interactive elements */
+  .title-btn,
+  .title-info,
+  .title-back,
+  .bge-btn,
+  .bge-vault-link,
+  .title-vault-link,
+  .unlock-buy-btn,
+  .family-tree-become-btn,
+  #obituary-toggle,
+  #family-tree-toggle,
+  #sim-controls button,
+  .inspector-close-btn,
+  .inspector-save-btn,
+  .family-tree-node {
+    touch-action: manipulation;
+  }
+}
+
+/* 2. Safe-area handling — verify all fixed elements respect notch/home-indicator */
+
+/* Gazette toggle and sim-controls already use env() in their base rules.
+   Add right-inset to sim-controls (base only had bottom inset). */
+#sim-controls {
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+}
+
+/* Family-tree toggle: left inset (base only had left: 8px) */
+#family-tree-toggle {
+  left: calc(env(safe-area-inset-left, 0px) + 8px);
+}
+
+/* Player HUD: bottom inset already applied; also add left/right insets so it
+   doesn't clip on curved-corner phones when it might drift on very narrow screens */
+.player-hud {
+  max-width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 32px);
+}
+
+/* 3. Mobile HUD layout — narrow screens */
+@media (max-width: 600px) {
+  .player-hud {
+    /* Compact layout: shrink portrait, tighten gaps */
+    gap: 7px;
+    padding: 5px 10px 5px 6px;
+  }
+
+  .player-portrait {
+    width: 42px;
+    height: 21px;
+  }
+
+  .player-hud-name {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+
+  .player-hud-goal {
+    font-size: 7px;
+    letter-spacing: 0.14em;
+    white-space: normal;
+    line-height: 1.3;
+    max-width: 160px;
+    overflow: hidden;
+  }
+
+  /* Condense stat bars on very small screens */
+  .player-bar-label {
+    font-size: 7px;
+    width: 30px;
+  }
+
+  .player-bar-track {
+    min-width: 44px;
+  }
+
+  .player-hud-action {
+    font-size: 7px;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+}
+
+/* 4. Gazette panel — swipe-right-to-close affordance hint (CSS only)
+   The actual gesture is handled in main.js.
+   Keep panel slide transition smooth on touch. */
+#obituary-panel {
+  /* smooth transform for swipe-dismiss JS animation */
+  will-change: transform;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#obituary-panel.swiping {
+  transition: none; /* let JS animate freely while finger is down */
+}
+
+/* 5. BGE overlays — swipe-down-to-close hint for inspector + family tree
+   JS will animate transform; keep will-change to avoid paint flicker. */
+#inspector-overlay .bge-card,
+#family-tree-overlay .bge-card {
+  will-change: transform;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 6. Overlays — touch-action: none so scroll inside cards doesn't accidentally
+   trigger browser navigation gestures */
+.bge-overlay {
+  touch-action: none;
+}
+/* But scrollable children should still scroll */
+.unlocks-list,
+.gazette-body,
+.family-tree-body,
+#achievements-panel {
+  touch-action: pan-y;
+}
+
+/* 7. Sim controls — subtle backdrop to make them legible over the swamp */
+@media (hover: none) and (pointer: coarse) {
+  #sim-controls {
+    gap: 8px;
+  }
+  #sim-controls button {
+    background: rgba(8, 14, 10, 0.90);
+    border: 1px solid #3a5a3e;
+    /* slightly warmer letter-spacing for legibility */
+    letter-spacing: 2px;
+  }
+}
+
+/* 8. Title screen — prevent long Pee-Wee title from overflowing on very narrow phones */
+@media (max-width: 360px) {
+  .title-big {
+    font-size: clamp(22px, 6.5vw, 56px);
+    letter-spacing: 0.04em;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.1;
+  }
+  .title-inner {
+    gap: 20px;
+    padding: 24px 16px;
+  }
+  .title-menu {
+    max-width: 100%;
+  }
+}
+
 /* --- Era Transition Celebration Overlay (cinematic chapter card) --- */
 .era-celebration {
   position: fixed;
@@ -1857,6 +2110,39 @@ body.show-rotate #start-overlay {
   border-color: #8aca6a;
   box-shadow: 0 0 0 1px #8aca6a inset, 2px 2px 0 var(--bge-coral);
 }
+.family-tree-node.is-heir {
+  border-color: #c8a832;
+  box-shadow: 0 0 0 1px #c8a832 inset;
+}
+.family-tree-heir-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid #6a5010;
+  border-radius: 2px;
+  color: #a07820;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  padding: 2px 5px;
+  margin-top: 3px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.family-tree-heir-btn:hover {
+  background: #2a1e00;
+  border-color: #c8a832;
+  color: #e8c840;
+}
+.family-tree-heir-btn--clear {
+  color: #806010;
+  border-color: #4a3808;
+}
+.family-tree-heir-btn--clear:hover {
+  background: #1a1200;
+  border-color: #806010;
+  color: #a07820;
+}
 .family-tree-name {
   font-size: 9px;
   letter-spacing: 0.12em;
@@ -1898,6 +2184,53 @@ body.show-rotate #start-overlay {
 .family-tree-become-btn:active {
   transform: scale(0.96);
   box-shadow: none;
+}
+
+/* --- SVG hierarchical tree --- */
+.family-tree-card {
+  /* Widen the card to give the tree more breathing room */
+  max-width: 860px;
+}
+.family-tree-body {
+  /* Remove the flex column gap — SVG wrap handles its own spacing */
+  gap: 8px;
+  overflow: hidden; /* SVG wrap scrolls internally */
+  position: relative;
+}
+.family-tree-svg-wrap {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #1a2a1a;
+  border-radius: 3px;
+  background: #060e08;
+  min-height: 280px;
+  position: relative;
+  /* Allow SVG to be bigger than the container — user pans/zooms */
+  touch-action: none;
+  user-select: none;
+}
+.family-tree-svg {
+  /* SVG fills wrap; overflows are clipped by the scrollable wrap */
+  display: block;
+}
+.family-tree-reset-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid #2a3a2a;
+  border-radius: 2px;
+  color: #4a6a4a;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  padding: 3px 8px;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: color 0.1s, border-color 0.1s;
+}
+.family-tree-reset-btn:hover {
+  color: #8aca6a;
+  border-color: #3a5a3e;
 }
 
 /* --- First-dynasty intro tutorial --- */
