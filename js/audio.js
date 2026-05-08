@@ -503,18 +503,502 @@ export function duckAudioBriefly() {
   masterGain.gain.linearRampToValueAtTime(savedGain, ctx.currentTime + 0.8);
 }
 
+// ============================================================
+// ACTION SFX
+// ============================================================
+
+// --- Tail Slap — sharp wet thwack ---
+export function playTailSlap() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  // Low thud body
+  const thudOsc = ctx.createOscillator();
+  const thudGain = ctx.createGain();
+  thudOsc.type = 'sine';
+  thudOsc.frequency.setValueAtTime(120, now);
+  thudOsc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+  thudGain.gain.setValueAtTime(0.07, now);
+  thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+  thudOsc.connect(thudGain);
+  thudGain.connect(masterGain);
+  thudOsc.start(now);
+  thudOsc.stop(now + 0.22);
+  // High splash burst
+  const splash = ctx.createBufferSource();
+  splash.buffer = createNoise(0.15);
+  const splashFilter = ctx.createBiquadFilter();
+  splashFilter.type = 'bandpass';
+  splashFilter.frequency.value = 3500;
+  splashFilter.Q.value = 1.2;
+  const splashGain = ctx.createGain();
+  splashGain.gain.setValueAtTime(0.06, now);
+  splashGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+  splash.connect(splashFilter);
+  splashFilter.connect(splashGain);
+  splashGain.connect(masterGain);
+  splash.start(now);
+}
+
+// --- Bellow — deep growling roar with vibrato and filter sweep ---
+export function playBellow(intensity = 1) {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const dur = 1.5;
+  // Main roar oscillator
+  const osc = ctx.createOscillator();
+  const oscGain = ctx.createGain();
+  // Vibrato LFO
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(60, now);
+  osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+  osc.frequency.linearRampToValueAtTime(55, now + dur);
+  lfo.type = 'sine';
+  lfo.frequency.value = 5.5;
+  lfoGain.gain.value = 6; // Hz vibrato depth
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+  // Filter sweep: start mid, drop to subby
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(400, now);
+  filter.frequency.linearRampToValueAtTime(180, now + dur);
+  filter.Q.value = 1.5;
+  const vol = 0.055 * Math.min(1, intensity);
+  oscGain.gain.setValueAtTime(0, now);
+  oscGain.gain.linearRampToValueAtTime(vol, now + 0.08);
+  oscGain.gain.setValueAtTime(vol, now + dur - 0.3);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  osc.connect(filter);
+  filter.connect(oscGain);
+  oscGain.connect(masterGain);
+  osc.start(now);
+  osc.stop(now + dur + 0.05);
+  lfo.start(now);
+  lfo.stop(now + dur + 0.05);
+  // Sub layer
+  const sub = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  sub.type = 'sine';
+  sub.frequency.value = 45;
+  subGain.gain.setValueAtTime(0.03 * intensity, now);
+  subGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8);
+  sub.connect(subGain);
+  subGain.connect(masterGain);
+  sub.start(now);
+  sub.stop(now + dur);
+}
+
+// --- Bite — quick wet snap, <100ms ---
+export function playBite() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoise(0.08);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 900;
+  filter.Q.value = 2;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.07, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+  noise.connect(filter);
+  filter.connect(g);
+  g.connect(masterGain);
+  noise.start(now);
+  // Teeth-click transient
+  const click = ctx.createOscillator();
+  const clickGain = ctx.createGain();
+  click.type = 'square';
+  click.frequency.setValueAtTime(600, now);
+  click.frequency.exponentialRampToValueAtTime(200, now + 0.04);
+  clickGain.gain.setValueAtTime(0.04, now);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  click.connect(clickGain);
+  clickGain.connect(masterGain);
+  click.start(now);
+  click.stop(now + 0.06);
+}
+
+// --- Growl — short angry sub-vocal, ~0.6s ---
+export function playGrowl() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const dur = 0.6;
+  const osc = ctx.createOscillator();
+  const distortion = ctx.createWaveShaper();
+  const g = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(70, now);
+  osc.frequency.linearRampToValueAtTime(55, now + dur);
+  // Soft clip for gritty texture
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i * 2) / 256 - 1;
+    curve[i] = Math.tanh(x * 2.5);
+  }
+  distortion.curve = curve;
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.035, now + 0.05);
+  g.gain.setValueAtTime(0.035, now + dur - 0.15);
+  g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  osc.connect(distortion);
+  distortion.connect(g);
+  g.connect(masterGain);
+  osc.start(now);
+  osc.stop(now + dur + 0.05);
+}
+
+// --- Mate — low rumble, slow, peaceful, ~2s ---
+export function playMate() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const dur = 2.0;
+  const osc = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 68;
+  osc2.type = 'sine';
+  osc2.frequency.value = 73; // slight beat frequency for warmth
+  lfo.type = 'sine';
+  lfo.frequency.value = 1.2; // very slow, restful vibrato
+  lfoGain.gain.value = 2;
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.025, now + 0.4);
+  g.gain.setValueAtTime(0.025, now + dur - 0.5);
+  g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  osc.connect(g);
+  osc2.connect(g);
+  g.connect(masterGain);
+  osc.start(now);
+  osc2.start(now);
+  osc.stop(now + dur + 0.1);
+  osc2.stop(now + dur + 0.1);
+  lfo.start(now);
+  lfo.stop(now + dur + 0.1);
+}
+
+// --- Hatch — tiny chirp + crack (enhanced version of playEggHatch) ---
+export function playHatch() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  // Shell crack — short noise transient
+  const crack = ctx.createBufferSource();
+  crack.buffer = createNoise(0.05);
+  const crackFilter = ctx.createBiquadFilter();
+  crackFilter.type = 'highpass';
+  crackFilter.frequency.value = 2000;
+  const crackGain = ctx.createGain();
+  crackGain.gain.setValueAtTime(0.04, now);
+  crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  crack.connect(crackFilter);
+  crackFilter.connect(crackGain);
+  crackGain.connect(masterGain);
+  crack.start(now);
+  // Tiny hatchling chirp — two notes
+  for (let i = 0; i < 2; i++) {
+    const t = now + 0.04 + i * 0.07;
+    const chirp = ctx.createOscillator();
+    const chirpGain = ctx.createGain();
+    chirp.type = 'sine';
+    chirp.frequency.setValueAtTime(2800 + i * 300, t);
+    chirp.frequency.exponentialRampToValueAtTime(2000 + i * 200, t + 0.06);
+    chirpGain.gain.setValueAtTime(0.018, t);
+    chirpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    chirp.connect(chirpGain);
+    chirpGain.connect(masterGain);
+    chirp.start(t);
+    chirp.stop(t + 0.08);
+  }
+}
+
+// --- Goal Complete — soft two-tone chime at a 5th interval ---
+export function playGoalComplete() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const freqs = [523.25, 784]; // C5, G5 — a perfect fifth
+  freqs.forEach((freq, i) => {
+    const t = now + i * 0.12;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.025, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(t);
+    osc.stop(t + 0.38);
+    // Subtle overtone shimmer
+    const overtone = ctx.createOscillator();
+    const og = ctx.createGain();
+    overtone.type = 'sine';
+    overtone.frequency.value = freq * 2;
+    og.gain.setValueAtTime(0.006, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    overtone.connect(og);
+    og.connect(masterGain);
+    overtone.start(t);
+    overtone.stop(t + 0.22);
+  });
+}
+
+// --- Starving Heartbeat — muffled slow thump-thump, loops while active ---
+let _heartbeatNode = null;
+let _heartbeatGain = null;
+let _heartbeatInterval = null;
+
+function _playHeartbump() {
+  if (!ctx || !masterGain) return;
+  // Double thump: lub-dub
+  [0, 0.18].forEach(offset => {
+    const t = ctx.currentTime + offset;
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoise(0.12);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 220;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.055, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    noise.connect(filter);
+    filter.connect(g);
+    g.connect(masterGain);
+    noise.start(t);
+  });
+}
+
+export function startStarvingHeartbeat() {
+  if (!ctx || isMuted()) return;
+  if (_heartbeatInterval !== null) return; // already running
+  _playHeartbump();
+  _heartbeatInterval = setInterval(() => {
+    if (!ctx || isMuted()) return;
+    _playHeartbump();
+  }, 1200); // ~50 bpm — slow, ominous
+}
+
+export function stopStarvingHeartbeat() {
+  if (_heartbeatInterval !== null) {
+    clearInterval(_heartbeatInterval);
+    _heartbeatInterval = null;
+  }
+}
+
+// --- Era Transition — slow atmospheric swell, one-shot ~3s ---
+export function playEraTransition() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const dur = 3.0;
+  // Bass swell
+  const bass = ctx.createOscillator();
+  const bassGain = ctx.createGain();
+  bass.type = 'sine';
+  bass.frequency.setValueAtTime(40, now);
+  bass.frequency.linearRampToValueAtTime(55, now + dur * 0.6);
+  bass.frequency.linearRampToValueAtTime(40, now + dur);
+  bassGain.gain.setValueAtTime(0, now);
+  bassGain.gain.linearRampToValueAtTime(0.03, now + 0.8);
+  bassGain.gain.setValueAtTime(0.03, now + dur - 0.6);
+  bassGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  bass.connect(bassGain);
+  bassGain.connect(masterGain);
+  bass.start(now);
+  bass.stop(now + dur + 0.1);
+  // Mid shimmer — two detuned sines swell in
+  [220, 330].forEach((freq, i) => {
+    const t = now + i * 0.2;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    osc.detune.value = (i === 0 ? -8 : 8);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.012, t + 1.0);
+    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(t);
+    osc.stop(now + dur + 0.1);
+  });
+  // High harmonic breath — noise filtered to airy top
+  const breath = ctx.createBufferSource();
+  breath.buffer = createNoise(dur);
+  const breathFilter = ctx.createBiquadFilter();
+  breathFilter.type = 'bandpass';
+  breathFilter.frequency.value = 1800;
+  breathFilter.Q.value = 3;
+  const breathGain = ctx.createGain();
+  breathGain.gain.setValueAtTime(0, now);
+  breathGain.gain.linearRampToValueAtTime(0.008, now + 1.2);
+  breathGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  breath.connect(breathFilter);
+  breathFilter.connect(breathGain);
+  breathGain.connect(masterGain);
+  breath.start(now);
+}
+
+// ============================================================
+// ERA AMBIENT LAYERS
+// ============================================================
+
+// Era 2 (Industrial): persistent machinery hum + occasional sounds
+let _industrialHumNode = null;
+let _industrialHumGain = null;
+let _industrialCrankTimer = 0;
+let _trainTimer = 0;
+let _currentEraId = 1;
+
+function _startIndustrialHum() {
+  if (!ctx || _industrialHumNode) return;
+  // Low-frequency machinery rumble (40–60 Hz looped noise + sine)
+  const rumble = ctx.createOscillator();
+  const rumbleGain = ctx.createGain();
+  rumble.type = 'sawtooth';
+  rumble.frequency.value = 52;
+  rumbleGain.gain.value = 0.008;
+  rumble.connect(rumbleGain);
+  rumbleGain.connect(masterGain);
+  rumble.start();
+
+  const humNoise = ctx.createBufferSource();
+  humNoise.buffer = createNoise(4);
+  humNoise.loop = true;
+  const humFilter = ctx.createBiquadFilter();
+  humFilter.type = 'lowpass';
+  humFilter.frequency.value = 180;
+  _industrialHumGain = ctx.createGain();
+  _industrialHumGain.gain.value = 0.012;
+  humNoise.connect(humFilter);
+  humFilter.connect(_industrialHumGain);
+  _industrialHumGain.connect(masterGain);
+  humNoise.start();
+
+  _industrialHumNode = { rumble, rumbleGain, humNoise };
+}
+
+function _stopIndustrialHum() {
+  if (!_industrialHumNode || !ctx) return;
+  const t = ctx.currentTime + 2;
+  if (_industrialHumGain) _industrialHumGain.gain.linearRampToValueAtTime(0.001, t);
+  try {
+    _industrialHumNode.rumble.stop(t + 0.1);
+    _industrialHumNode.humNoise.stop(t + 0.1);
+  } catch (e) { /* already stopped */ }
+  _industrialHumNode = null;
+  _industrialHumGain = null;
+}
+
+function _playMetalClank() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  // Short metallic transient: highpass noise with ring
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoise(0.18);
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 1200;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0.02, now);
+  ng.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+  noise.connect(hp);
+  hp.connect(ng);
+  ng.connect(masterGain);
+  noise.start(now);
+  // Ring tone
+  const ring = ctx.createOscillator();
+  const rg = ctx.createGain();
+  ring.type = 'sine';
+  ring.frequency.value = 900 + Math.random() * 400;
+  rg.gain.setValueAtTime(0.012, now);
+  rg.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+  ring.connect(rg);
+  rg.connect(masterGain);
+  ring.start(now);
+  ring.stop(now + 0.25);
+}
+
+function _playDistantTrain() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  const dur = 2.5;
+  // Distant train whistle — two overlapping harmonics, very quiet
+  [440, 550].forEach((freq, i) => {
+    const t = now + i * 0.08;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.linearRampToValueAtTime(freq * 0.92, t + dur); // Doppler drift
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.012, t + 0.3);
+    g.gain.setValueAtTime(0.012, t + dur - 0.4);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(t);
+    osc.stop(t + dur + 0.1);
+  });
+}
+
+function _playDistantHeron() {
+  if (!ctx || isMuted()) return;
+  const now = ctx.currentTime;
+  // Great blue heron — a flat, raspy croak: braaak
+  for (let i = 0; i < 3; i++) {
+    const t = now + i * 0.18;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(280, t);
+    osc.frequency.exponentialRampToValueAtTime(200, t + 0.12);
+    g.gain.setValueAtTime(0.015, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  }
+}
+
+// Called from main.js when era changes in dynasty mode
+export function setEraAmbient(eraId) {
+  _currentEraId = eraId;
+  if (eraId >= 2) {
+    if (!_industrialHumNode && ctx && started) _startIndustrialHum();
+  } else {
+    _stopIndustrialHum();
+  }
+  // Reset per-era sound timers
+  _industrialCrankTimer = 8 + Math.random() * 10;
+  _trainTimer = 20 + Math.random() * 30;
+  _heronTimer = 15 + Math.random() * 25;
+}
+
 // --- Ambient sound scheduler (called from game loop) ---
 let cricketTimer = 2;
 let frogTimer = 3;
 let birdTimer = 5;
 let bullfrogTimer = 8;
 let deepCallTimer = 15;
+let _heronTimer = 15;
 
 export function updateAudio(dt, env, simTime) {
   if (!ctx || !started || muted) return;
 
   const isNight = env.timeOfDay < 0.2 || env.timeOfDay > 0.8;
   const isDusk = (env.timeOfDay > 0.7 && env.timeOfDay < 0.85) || (env.timeOfDay > 0.15 && env.timeOfDay < 0.25);
+
+  // Industrial era suppresses frog life (pollution)
+  const isIndustrial = _currentEraId >= 2;
+  const frogMult = isIndustrial ? 0.35 : 1.0;
 
   // Epoch-scaled interval helpers
   // lerp from sparse (epoch 0) to dense (epoch 4)
@@ -534,17 +1018,17 @@ export function updateAudio(dt, env, simTime) {
     }
   }
 
-  // Frogs — dusk and night, near water
+  // Frogs — dusk and night, near water; suppressed in industrial era
   frogTimer -= dt;
   if (frogTimer <= 0) {
-    if (isNight || isDusk || env.weather === 'rain') {
+    if ((isNight || isDusk || env.weather === 'rain') && Math.random() < frogMult) {
       playFrogCroak();
       // epoch 0: 3-8s, epoch 4: 0.5-2s
       const lo = 3 - epochFactor * 2.5;   // 3 -> 0.5
       const hi = 8 - epochFactor * 6;     // 8 -> 2
-      frogTimer = lo + Math.random() * (hi - lo);
+      frogTimer = (lo + Math.random() * (hi - lo)) * (isIndustrial ? 2.5 : 1);
     } else {
-      frogTimer = (5 + Math.random() * 10) * (1 - epochFactor * 0.5);
+      frogTimer = (5 + Math.random() * 10) * (1 - epochFactor * 0.5) * (isIndustrial ? 2 : 1);
     }
   }
 
@@ -552,7 +1036,7 @@ export function updateAudio(dt, env, simTime) {
   if (epoch >= 3) {
     bullfrogTimer -= dt;
     if (bullfrogTimer <= 0) {
-      if (isNight || isDusk) {
+      if ((isNight || isDusk) && !isIndustrial) {
         playBullfrog();
       }
       bullfrogTimer = 4 + Math.random() * 8;
@@ -576,6 +1060,29 @@ export function updateAudio(dt, env, simTime) {
       birdTimer = 3 + Math.random() * 8;
     } else {
       birdTimer = 10 + Math.random() * 15;
+    }
+  }
+
+  // Era 1 (Primordial): occasional distant heron call
+  if (!isIndustrial) {
+    _heronTimer -= dt;
+    if (_heronTimer <= 0) {
+      if (!isNight) _playDistantHeron();
+      _heronTimer = 20 + Math.random() * 40;
+    }
+  }
+
+  // Era 2 (Industrial): metal clanks + train whistle
+  if (isIndustrial) {
+    _industrialCrankTimer -= dt;
+    if (_industrialCrankTimer <= 0) {
+      _playMetalClank();
+      _industrialCrankTimer = 6 + Math.random() * 14;
+    }
+    _trainTimer -= dt;
+    if (_trainTimer <= 0) {
+      _playDistantTrain();
+      _trainTimer = 25 + Math.random() * 45;
     }
   }
 

@@ -13,14 +13,14 @@ import { drawSprite, drawPixelText, renderSky, renderRainbow, renderTerrain, ren
 import { createInputHandler, getCurrentPower, isGodMode, POWER_NAMES, POWER_COLORS, getSpeedMultiplier, isPaused, getSpeedLabel, togglePause, cycleSpeed } from './input.js';
 import { createPersistence } from './state.js';
 import { createEventSystem, updateEvents, renderEvents } from './systems/events.js';
-import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch, playGatorStare, playEggHatch } from './audio.js';
+import { initAudio, resumeAudio, updateAudio, playSplash, playThunder, playEat, playZap, playDeathTone, setUFO, playExplosion, toggleMute, isMuted, setEpoch, playGatorStare, playEggHatch, playEraTransition, playGoalComplete, startStarvingHeartbeat, stopStarvingHeartbeat, setEraAmbient } from './audio.js';
 import { createFireState, startFire, updateFires, renderFires } from './game/fire.js';
 import { createParticleState, spawnDeathParticles, updateDeathParticles, renderDeathParticles, updateAmbientParticles, renderAmbientParticles, addRipple, renderRipples, updateGatorRipples } from './game/particles.js';
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
 import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints, updateEraClock, renderEraHUD, initEraDynasty, getCurrentEra, ERA_FLAVOR } from './game/dynasty.js';
 import { initInspector, openInspectorAt, openInspectorForGator, closeInspector } from './systems/inspector.js';
 import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls } from './game/unlocks.js';
-import { loadObituary, updateMoments, renderMoments, renderObituaryPanel } from './game/obituary.js';
+import { loadObituary, updateMoments, renderMoments, renderObituaryPanel, addMoment } from './game/obituary.js';
 import { attachLineage } from './game/dynasty.js';
 import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
 import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife, hoverState } from './systems/playerControl.js';
@@ -596,6 +596,8 @@ if (savedState && Array.isArray(savedState.gators) && savedState.gators.length >
   // Load goal state for continued dynasty saves
   if (gameMode === MODE_DYNASTY && dynasty && dynasty.id) {
     goalState = loadGoals(dynasty.id) ?? createGoalState();
+    // Sync era ambient layer for any already-advanced era (deferred until audio starts)
+    if (dynasty.era) setTimeout(() => setEraAmbient(dynasty.era), 500);
   }
 
   // Restore player-control on continued dynasty saves.
@@ -1257,6 +1259,8 @@ function updatePlayerHUD() {
     hungerEl.style.width = `${Math.round(hunger * 100)}%`;
     hungerEl.classList.toggle('critical', hunger > 0.65);
   }
+  // Starving heartbeat — start when hunger > 0.85, stop when below
+  if (hunger > 0.85) { startStarvingHeartbeat(); } else { stopStarvingHeartbeat(); }
   // energy: 1 = full, 0 = exhausted — bar shows remaining energy
   const energy = Math.max(0, Math.min(1, gator.energy !== undefined ? gator.energy : 1));
   const energyEl = document.getElementById('hud-bar-energy');
@@ -1896,6 +1900,7 @@ function commitFounders() {
   extinctionGraceTimer = 30; // 30s of grace so a stray event doesn't end it frame 1
   dynastyFounderIds = [];
   goalState = createGoalState(); // fresh goal state for new dynasty
+  setEraAmbient(1); // start era 1 ambient layer
 
   const controlSex = p.controlSex || 'male';
 
@@ -1913,15 +1918,23 @@ function commitFounders() {
   });
   dynastyFounderIds.push(maleId, femaleId);
   dynasty.playerGatorId = controlSex === 'male' ? maleId : femaleId;
+  dynasty.mateGatorId   = controlSex === 'male' ? femaleId : maleId;
 
   // Wire player control system
   setPlayerControlDynasty(dynasty);
   setPlayerControlWildlife(wildlifeState);
 
   pendingFounders = null;
-  simulationStarted = true;
   // Show the family-tree HUD button now that we're in dynasty mode
   if (familyTreeToggle) familyTreeToggle.classList.remove('hidden');
+
+  // First-dynasty intro tutorial — show once; simulationStarted fires after dismiss
+  const introShown = (() => { try { return localStorage.getItem('bge_intro_shown'); } catch(e) { return '1'; } })();
+  if (!introShown) {
+    showIntroTutorial(p);
+  } else {
+    simulationStarted = true;
+  }
 }
 
 // --- Family tree + succession ---
@@ -2261,6 +2274,118 @@ if (pendingNewMode === MODE_DYNASTY) {
   showTitleScreen();
 }
 
+// --- Birth moment state (dynasty mode — fires when player's mate's clutch hatches) ---
+let birthMoment = { active: false, x: 0, y: 0, mateName: '', count: 0, timer: 0 };
+
+function triggerBirthMoment({ mateName, count, x, y }) {
+  birthMoment = { active: true, x, y, mateName: mateName || 'your mate', count, timer: 3.5 };
+  // Ripple at nest position
+  addRipple(particles, x, y, 22, 0.9);
+  // Obituary ticker moment
+  if (obituaryState) {
+    const name = (mateName || 'your mate').toLowerCase();
+    addMoment(obituaryState, {
+      text: `${name} bore ${count} children.`,
+      x: null, y: null, color: '#8aff8a',
+    });
+  }
+  playEggHatch && playEggHatch();
+}
+
+// --- First-dynasty intro tutorial ---
+let introTutorialActive = false;
+let introCardIndex = 0;
+
+function showIntroTutorial(founders) {
+  introTutorialActive = true;
+  introCardIndex = 0;
+  const el = document.getElementById('intro-tutorial');
+  if (!el) { simulationStarted = true; return; }
+  _renderIntroCard(el, founders);
+  el.classList.remove('hidden');
+}
+
+function _renderIntroCard(el, founders) {
+  const contentEl = el.querySelector('.intro-card-content');
+  const headerEl  = el.querySelector('.intro-card-header');
+  const bodyEl    = el.querySelector('.intro-card-body');
+  const btnEl     = el.querySelector('.intro-card-btn');
+  if (!contentEl || !headerEl || !bodyEl || !btnEl) return;
+
+  const p = founders || {};
+  const playerName = (introCardIndex === 0 && p && dynasty)
+    ? (() => {
+        const cs = p.controlSex || 'male';
+        return cs === 'male' ? (p.male?.name || 'your gator') : (p.female?.name || 'your gator');
+      })()
+    : '';
+  const playerSex = (p && p.controlSex) ? p.controlSex : 'unknown';
+  const dynastyName = (dynasty && dynasty.name) ? dynasty.name : 'the bloodline';
+
+  const cards = [
+    {
+      header: 'you are them',
+      body: `this gator is yours. ${playerName.toLowerCase()}, ${playerSex} · founder of the ${dynastyName.toLowerCase()}.`,
+    },
+    {
+      header: 'click the swamp to act',
+      body: 'click empty water to swim. click prey to hunt. click rivals to fight. click your own gator to slap your tail.',
+    },
+    {
+      header: 'needs',
+      body: 'you will hunger. you will tire. you will be hunted. mind the dots above your head.',
+    },
+    {
+      header: 'the bloodline',
+      body: 'your line ends when no descendant survives. breed. defend. eat. live.',
+    },
+  ];
+
+  const card = cards[introCardIndex];
+  headerEl.textContent = card.header;
+  bodyEl.textContent   = card.body;
+  btnEl.textContent    = introCardIndex < cards.length - 1 ? 'next' : 'begin';
+  btnEl.dataset.founders = JSON.stringify(founders || null);
+}
+
+function _advanceIntroCard() {
+  const el = document.getElementById('intro-tutorial');
+  if (!el) return;
+  const p = (() => { try { return JSON.parse(el.querySelector('.intro-card-btn')?.dataset.founders || 'null'); } catch(e) { return null; } })();
+  const totalCards = 4;
+  introCardIndex++;
+  if (introCardIndex >= totalCards) {
+    _dismissIntroTutorial();
+  } else {
+    _renderIntroCard(el, p);
+  }
+}
+
+function _dismissIntroTutorial() {
+  introTutorialActive = false;
+  const el = document.getElementById('intro-tutorial');
+  if (el) el.classList.add('hidden');
+  try { localStorage.setItem('bge_intro_shown', '1'); } catch(e) {}
+  simulationStarted = true;
+}
+
+// Wire intro tutorial buttons
+const _introEl = document.getElementById('intro-tutorial');
+if (_introEl) {
+  _introEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.intro-card-btn');
+    if (btn) { _advanceIntroCard(); return; }
+  });
+  _introEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _advanceIntroCard(); }
+    if (e.key === 'Escape') { _dismissIntroTutorial(); }
+  });
+}
+document.addEventListener('keydown', (e) => {
+  if (!introTutorialActive) return;
+  if (e.key === 'Escape') { _dismissIntroTutorial(); }
+});
+
 // --- Game Loop ---
 let lastTime = 0;
 let gameOver = false;
@@ -2316,6 +2441,8 @@ function gameLoop(timestamp) {
       onAdvance({ era }) {
         pendingEraCelebration = { era, timer: 4 };
         eraCelebrationTimer = 4;
+        playEraTransition();
+        setEraAmbient(era.id);
       },
       onLineagePointBonus(amount) {
         lineagePoints += amount;
@@ -2337,7 +2464,7 @@ function gameLoop(timestamp) {
   // Systems
   preySystem(world, dt, simTime, rng);
   aiSystem(world, dt, rng, waterY);
-  breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState);
+  breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState, dynasty, triggerBirthMoment);
   lifecycleSystem(world, dt, rng, obituaryState, simTime);
   predatorSystem(world, dt, rng, waterY, simTime, obituaryState);
   physicsSystem(world, dt, terrain, waterY, rng);
@@ -2388,6 +2515,13 @@ function gameLoop(timestamp) {
   updateDeathParticles(particles, dt);
   updateMoments(obituaryState, dt);
 
+  // Birth moment tick
+  if (birthMoment.active) {
+    birthMoment.timer -= dt;
+    if (birthMoment.timer <= 0) birthMoment.active = false;
+    else addRipple(particles, birthMoment.x, birthMoment.y, 8 + (3.5 - birthMoment.timer) * 6, 0.25);
+  }
+
   // Goals system — dynasty mode only
   if (gameMode === MODE_DYNASTY && dynasty && goalState) {
     const playerGator = dynasty.playerGatorId ? world.get(dynasty.playerGatorId, 'gator') : null;
@@ -2402,6 +2536,7 @@ function gameLoop(timestamp) {
     const goalCallbacks = {
       onComplete(_goal) {
         // goal completion moment is handled in onAwardLP + addMoment below
+        playGoalComplete();
       },
       onAwardLP(amount) {
         lineagePoints += amount;
@@ -2646,6 +2781,25 @@ function gameLoop(timestamp) {
   }
 
   renderMoments(ctx, obituaryState, drawPixelText, CANVAS_W, CANVAS_H);
+
+  // Birth moment big text — floats up from nest, fades over 3.5s
+  if (birthMoment.active && birthMoment.timer > 0) {
+    const bmElapsed = 3.5 - birthMoment.timer;
+    const bmAlpha = birthMoment.timer > 0.8 ? 1.0 : birthMoment.timer / 0.8;
+    const bmText = `${birthMoment.mateName.toLowerCase()} bore ${birthMoment.count} children`;
+    const charW = 4;
+    const textW = bmText.length * charW;
+    const bmFloatY = birthMoment.y - bmElapsed * 2.5;
+    const bmX = Math.floor(Math.min(Math.max(birthMoment.x - textW / 2, 2), CANVAS_W - textW - 2));
+    const bmY = Math.floor(Math.max(bmFloatY, 10));
+    ctx.globalAlpha = Math.max(0, Math.min(1, bmAlpha));
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    drawPixelText(ctx, bmText, bmX + 1, bmY + 1);
+    ctx.fillStyle = '#6aff6a';
+    drawPixelText(ctx, bmText, bmX, bmY);
+    ctx.globalAlpha = 1;
+  }
+
   renderFullUI(ctx, simTime);
 
   // Era transition celebration overlay — cinematic chapter card

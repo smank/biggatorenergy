@@ -1394,3 +1394,47 @@ body.show-rotate #start-overlay {
 .family-tree-become-btn:hover {
   background: #3a5a3e;
 }
+
+/* --- First-dynasty intro tutorial --- */
+.intro-tutorial-card {
+  max-width: 360px;
+  gap: 20px;
+}
+
+.intro-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.intro-card-header {
+  font-size: clamp(14px, 3.5vw, 20px);
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  color: #8aca6a;
+  text-transform: lowercase;
+  line-height: 1.2;
+}
+
+.intro-card-body {
+  font-size: clamp(10px, 1.6vw, 13px);
+  letter-spacing: 0.18em;
+  color: #9ab88a;
+  text-transform: lowercase;
+  line-height: 1.8;
+}
+
+.intro-card-footer {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.intro-card-progress {
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: #3a5a3a;
+  text-transform: lowercase;
+  flex: 1;
+}

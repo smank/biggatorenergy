@@ -11,7 +11,7 @@ const EGG_INCUBATION = 8;       // seconds for eggs to hatch
 const COURTSHIP_RANGE = 45;     // pixels
 const COURTSHIP_DURATION = 3;   // seconds of courtship before mating
 
-export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState) {
+export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, obituaryState, dynasty, onMateHatched) {
   for (const [id, tr, gator] of world.query('transform', 'gator')) {
     // Only adults can breed
     if (gator.stage !== 'adult') continue;
@@ -169,6 +169,10 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
           y: null,
           color: '#cce0b8',
         });
+      }
+      // Birth moment — fire callback if this is the player's mate
+      if (dynasty && onMateHatched && dynasty.mateGatorId && id === dynasty.mateGatorId) {
+        onMateHatched({ mateName: gator.name, count: nest.eggs, x: nest.x, y: nest.y });
       }
       gator.nest = null;
       gator.nestHatchReady = false;

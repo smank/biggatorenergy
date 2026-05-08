@@ -4,6 +4,13 @@
 // The AI system reads gator.playerOverride to execute the player's will.
 
 import { distance } from '../utils/math.js';
+import { playTailSlap, playBellow, playGrowl, playMate } from '../audio.js';
+
+// Wildlife the player cannot hunt (flying, intangible, dangerous vehicles)
+const NON_EDIBLE_WILDLIFE = new Set([
+  'bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman',
+  'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey',
+]);
 
 let _canvas = null;
 let _world = null;
@@ -37,6 +44,7 @@ function splatTailSlap(x, y) {
     _addRipple(_particles, x, y, 10, 0.6);
   }
   if (_playSplash) _playSplash(0.4);
+  playTailSlap();
 }
 
 // Convert client coords to canvas logical pixel coords
@@ -175,6 +183,7 @@ export function dispatchClick(canvasX, canvasY, isShiftHeld) {
       player.gator.courtTarget = hitGator.id;
       player.gator.courtTimer = 3;
       player.gator.stateTimer = 5;
+      playMate();
       return true;
     }
 
@@ -183,6 +192,7 @@ export function dispatchClick(canvasX, canvasY, isShiftHeld) {
     player.gator.state = 'fighting';
     player.gator.stateTimer = 4;
     player.gator.fightTarget = hitGator.id;
+    playGrowl();
     // Engage the target too
     const targetGator = hitGator.gator;
     if (targetGator && targetGator.state !== 'dying') {
@@ -206,13 +216,20 @@ export function dispatchClick(canvasX, canvasY, isShiftHeld) {
   // Click on wildlife
   const hitWildlife = hitTestWildlife(canvasX, canvasY);
   if (hitWildlife) {
-    // Can hunt larger wildlife if it has a meat value; otherwise scare
-    player.gator.playerOverride = { action: 'scare', targetWildlife: hitWildlife };
-    hitWildlife.scared = true;
-    hitWildlife.scareTimer = 3;
-    hitWildlife.vx = (hitWildlife.x > canvasX ? 1 : -1) * 20;
-    if (_addRipple && _particles) {
-      _addRipple(_particles, canvasX, canvasY, 6, 0.5);
+    if (!NON_EDIBLE_WILDLIFE.has(hitWildlife.type)) {
+      // Edible wildlife — send the gator hunting it
+      player.gator.playerOverride = { action: 'huntWildlife', wildlifeRef: hitWildlife };
+      player.gator.state = 'hunting';
+      player.gator.stateTimer = 12;
+    } else {
+      // Non-edible — scare only
+      player.gator.playerOverride = { action: 'scare', targetWildlife: hitWildlife };
+      hitWildlife.scared = true;
+      hitWildlife.scareTimer = 3;
+      hitWildlife.vx = (hitWildlife.x > canvasX ? 1 : -1) * 20;
+      if (_addRipple && _particles) {
+        _addRipple(_particles, canvasX, canvasY, 6, 0.5);
+      }
     }
     return true;
   }
@@ -237,6 +254,7 @@ export function dispatchHold(canvasX, canvasY) {
     _addRipple(_particles, midX, midY, 20, 0.5);
   }
   if (_playSplash) _playSplash(0.6);
+  playBellow(0.8);
   // Scare all nearby wildlife in a wider radius
   if (_wildlifeState) {
     for (const w of _wildlifeState.wildlife) {

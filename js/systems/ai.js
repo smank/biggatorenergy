@@ -3,6 +3,7 @@
 
 import { CANVAS_W } from '../config.js';
 import { distance } from '../utils/math.js';
+import { playBite } from '../audio.js';
 
 function transition(gator, state, rng) {
   gator.state = state;
@@ -98,6 +99,7 @@ export function aiSystem(world, dt, rng, waterY) {
         const ptr = world.get(ov.targetId, 'transform');
         const pp = world.get(ov.targetId, 'prey');
         if (!ptr || !pp || !pp.alive) {
+          // Target gone — clear override
           gator.playerOverride = null;
           gator.state = 'idle';
           gator.stateTimer = rng.float(1, 3);
@@ -105,7 +107,8 @@ export function aiSystem(world, dt, rng, waterY) {
           const dx = ptr.x - tr.x;
           const dy = ptr.y - tr.y;
           const dist = distance(tr.x, tr.y, ptr.x, ptr.y);
-          const speed = (gator.traits?.speed || 1) * 50 * needSpeedMult; // hunt fast
+          // Pursuit speed: slightly boosted over base
+          const speed = (gator.traits?.speed || 1) * 50 * needSpeedMult * 1.1;
           if (dist > 1) {
             tr.vx = (dx / dist) * speed;
             tr.vy = (dy / dist) * speed * 0.5;
@@ -118,6 +121,7 @@ export function aiSystem(world, dt, rng, waterY) {
             tr.direction = dx > 0 ? 1 : -1;
             pp.alive = false;
             world.kill(ov.targetId);
+            playBite();
             gator.frame = 'eat';
             const preyValue = pp.value || 0.15;
             gator.hunger = Math.max(0, gator.hunger - preyValue);
@@ -129,10 +133,72 @@ export function aiSystem(world, dt, rng, waterY) {
             gator.state = 'eating';
             gator.stateTimer = 0.4;
           }
+          // Sticky — no stateTimer expiry; keep pursuing until eaten or killed
+        }
+      } else if (ov.action === 'fight') {
+        // Sticky fight: pursue the rival until breeding system can handle the fight
+        const targetTr = world.get(ov.targetId, 'transform');
+        const targetGator = world.get(ov.targetId, 'gator');
+        if (!targetTr || !targetGator || targetGator.state === 'dying' || targetGator.state === 'fleeing') {
+          // Target dead, gone, or fleeing — clear override
+          gator.playerOverride = null;
+          gator.state = 'idle';
+          gator.stateTimer = rng.float(1, 3);
+          gator.fightTarget = null;
+        } else {
+          const dx = targetTr.x - tr.x;
+          const dy = targetTr.y - tr.y;
+          const dist = distance(tr.x, tr.y, targetTr.x, targetTr.y);
+          // Pursue at hunt speed toward the rival
+          const speed = (gator.traits?.speed || 1) * 40 * needSpeedMult * 1.1;
+          if (dist > 8) {
+            // Out of contact — move toward them
+            tr.vx = (dx / dist) * speed;
+            tr.vy = (dy / dist) * speed * 0.4;
+            tr.direction = dx > 0 ? 1 : -1;
+            gator.state = 'fighting';
+            gator.fightTarget = ov.targetId;
+            // Keep rival engaged too
+            if (targetGator.state !== 'dying' && targetGator.state !== 'fleeing') {
+              targetGator.state = 'fighting';
+              targetGator.stateTimer = Math.max(targetGator.stateTimer || 0, 2);
+              targetGator.fightTarget = id;
+            }
+          } else {
+            // In contact — let breeding system handle fight resolution; keep fightTarget set
+            gator.state = 'fighting';
+            gator.fightTarget = ov.targetId;
+            // stateTimer drives the breeding system's fight resolution; keep it alive
+            gator.stateTimer = Math.max(gator.stateTimer || 0, 0.1);
+          }
+          if (gator.inWater) gator.frame = 'swim';
+        }
+      } else if (ov.action === 'huntWildlife') {
+        // Sticky wildlife hunt: pursue wildlife until contact, then let wildlife.js eat logic fire
+        const w = ov.wildlifeRef;
+        if (!w || !w.alive || w.x < -20 || w.x > CANVAS_W + 20) {
+          // Wildlife dead or off-screen — clear override
+          gator.playerOverride = null;
+          gator.state = 'idle';
+          gator.stateTimer = rng.float(1, 3);
+        } else {
+          const dx = w.x - (tr.x + (gator.spriteW || 10) / 2);
+          const dy = w.y - tr.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const speed = (gator.traits?.speed || 1) * 50 * needSpeedMult * 1.1;
+          if (dist > 1) {
+            tr.vx = (dx / dist) * speed;
+            tr.vy = (dy / dist) * speed * 0.4;
+            tr.direction = dx > 0 ? 1 : -1;
+          }
+          if (gator.inWater) gator.frame = 'swim';
+          // Contact range — wildlife.js gator-eats-wildlife loop fires automatically on proximity.
+          // Once the wildlife dies (set by wildlife.js), we clear the override next frame.
+          // No manual eat needed here; just keep pursuing.
         }
       }
-      // fight and court states are handled by the breeding system already
-      // so we just fall through and let breeding system manage those states
+      // court state is handled by the breeding system already
+      // so we just fall through and let breeding system manage that state
 
       // Hunger/energy drain still applies to player gator
       gator.hunger = Math.min(1, gator.hunger + dt * 0.015 * (gator.traits?.metabolism || 1));
