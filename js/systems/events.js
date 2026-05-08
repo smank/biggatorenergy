@@ -1,7 +1,7 @@
 // Dramatic events system — lightning strikes, UFO abductions, celestial events, tragedy
 
 import { CANVAS_W, CANVAS_H } from '../config.js';
-import { logDeath } from '../game/obituary.js';
+import { logDeath, addMoment } from '../game/obituary.js';
 
 export function createEventSystem() {
   return {
@@ -18,10 +18,16 @@ export function createEventSystem() {
     bloodMoon: null,
     swampGas: [],
     meteorImpact: null,
+    // New events
+    gatorBrawl: null,
+    meteorShower: null,        // array of streaks
+    cropDuster: null,
+    plague: null,
+    swampGeyser: null,
   };
 }
 
-export function updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState) {
+export function updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState, currentEraId) {
   events.eventTimer -= dt;
 
   // Crash smoke decay
@@ -290,10 +296,27 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env, obitu
   // Eclipse — suppress normal sun rendering while active
   env._eclipseActive = !!events.eclipse;
   if (events.eclipse) {
-    events.eclipse.timer -= dt;
-    events.eclipse.progress += dt * 0.1;
-    events.eclipse._tod = env.timeOfDay; // track sun position for rendering
-    if (events.eclipse.timer <= 0) {
+    const ecl = events.eclipse;
+    ecl.timer -= dt;
+    const totalDur = ecl.totalDuration || 20;
+    const elapsed = totalDur - ecl.timer;
+    // Slow ramp up, hold near totality, ramp out
+    ecl.progress = Math.min(1, elapsed / (totalDur * 0.45));
+    ecl._tod = env.timeOfDay; // track sun position for rendering
+    // Mid-eclipse: wildlife pauses for 5s and orients to the sky
+    const midPoint = totalDur * 0.5;
+    if (!ecl.wildlifePaused && elapsed >= midPoint - 2.5 && elapsed <= midPoint + 2.5) {
+      ecl.wildlifePaused = true;
+      ecl.wildlifePauseTimer = 5;
+      if (events.onEclipsePause) events.onEclipsePause();
+    }
+    if (ecl.wildlifePaused) {
+      ecl.wildlifePauseTimer -= dt;
+      if (ecl.wildlifePauseTimer <= 0) ecl.wildlifePaused = false;
+    }
+    // Stars become visible during totality
+    ecl._showStars = ecl.progress > 0.6 && ecl.timer > totalDur * 0.1;
+    if (ecl.timer <= 0) {
       events.eclipse = null;
     }
   }
@@ -481,10 +504,336 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env, obitu
     }
   }
 
+  // ---- GATOR BRAWL ----
+  const isDay = env.timeOfDay >= 0.2 && env.timeOfDay <= 0.8;
+  if (!events.gatorBrawl && rng.chance((isDay ? 0.001 : 0.0002) * dt)) {
+    // Pick two AI (non-player) gators
+    const candidates = [];
+    for (const [id, tr, gator] of world.query('transform', 'gator')) {
+      if (gator.stage === 'egg' || gator.stage === 'hatchling') continue;
+      if (gator.isPlayer) continue;
+      candidates.push({ id, tr, gator });
+    }
+    if (candidates.length >= 2) {
+      const shuffled = candidates.sort(() => rng.random() - 0.5);
+      const a = shuffled[0];
+      const b = shuffled[1];
+      events.gatorBrawl = {
+        idA: a.id,
+        idB: b.id,
+        phase: 'charge',   // charge → fight → flee
+        timer: 5,
+        winner: null,
+        splashTimer: 0,
+        splashParticles: [],
+        startAX: a.tr.x,
+        startBX: b.tr.x,
+        announced: false,
+      };
+    }
+  }
+  if (events.gatorBrawl) {
+    const brawl = events.gatorBrawl;
+    const trA = world.get(brawl.idA, 'transform');
+    const trB = world.get(brawl.idB, 'transform');
+    const gA = world.get(brawl.idA, 'gator');
+    const gB = world.get(brawl.idB, 'gator');
+
+    // Announce on first tick
+    if (!brawl.announced && obituaryState) {
+      addMoment(obituaryState, { text: 'two strangers come to blows.', x: null, y: null, color: '#e8c060' });
+      brawl.announced = true;
+    }
+
+    if (!trA || !trB || !gA || !gB) {
+      events.gatorBrawl = null;
+    } else {
+      brawl.timer -= dt;
+      if (brawl.phase === 'charge') {
+        // Rush toward each other
+        const midX = (trA.x + trB.x) * 0.5;
+        trA.vx += Math.sign(midX - trA.x) * 30 * dt;
+        trB.vx += Math.sign(midX - trB.x) * 30 * dt;
+        trA.vx = Math.min(Math.max(trA.vx, -20), 20);
+        trB.vx = Math.min(Math.max(trB.vx, -20), 20);
+        const dist = Math.abs(trA.x - trB.x);
+        if (dist < 8 || brawl.timer < 3.5) {
+          brawl.phase = 'fight';
+          brawl.timer = rng.float(3, 6);
+          brawl.winner = rng.chance(0.5) ? 'A' : 'B';
+        }
+      } else if (brawl.phase === 'fight') {
+        // Shake and splash
+        trA.vx = Math.sin(simTime * 18) * 4;
+        trB.vx = -Math.sin(simTime * 18) * 4;
+        trA.vy = Math.cos(simTime * 22) * 1.5;
+        trB.vy = -Math.cos(simTime * 22) * 1.5;
+        brawl.splashTimer -= dt;
+        if (brawl.splashTimer <= 0) {
+          brawl.splashTimer = rng.float(0.1, 0.3);
+          const sx = (trA.x + trB.x) * 0.5 + rng.float(-3, 3);
+          brawl.splashParticles.push({ x: sx, y: waterY - 1, vx: rng.float(-8, 8), vy: rng.float(-10, -3), life: rng.float(0.3, 0.7) });
+          if (events.onSplash) events.onSplash();
+        }
+        if (brawl.timer <= 0) {
+          brawl.phase = 'flee';
+          brawl.timer = 2;
+          // Loser takes minor damage
+          const loserGator = brawl.winner === 'A' ? gB : gA;
+          loserGator.health = Math.max(0.1, (loserGator.health || 1) - 0.2);
+        }
+      } else if (brawl.phase === 'flee') {
+        // Loser flees
+        const loserTr = brawl.winner === 'A' ? trB : trA;
+        const loserG  = brawl.winner === 'A' ? gB  : gA;
+        loserTr.vx += Math.sign(loserTr.x - (brawl.winner === 'A' ? trA.x : trB.x)) * 20 * dt;
+        loserG.state = 'idle';
+        loserG.stateTimer = 3;
+        if (brawl.timer <= 0) events.gatorBrawl = null;
+      }
+      // Update splash particles
+      for (let i = brawl.splashParticles.length - 1; i >= 0; i--) {
+        const sp = brawl.splashParticles[i];
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        sp.vy += 20 * dt;
+        sp.life -= dt;
+        if (sp.life <= 0) brawl.splashParticles.splice(i, 1);
+      }
+    }
+  }
+
+  // ---- METEOR SHOWER ----
+  const isNightForMeteors = env.timeOfDay > 0.75 || env.timeOfDay < 0.2;
+  if (!events.meteorShower && isNightForMeteors && rng.chance(0.0005 * dt)) {
+    if (obituaryState) addMoment(obituaryState, { text: 'stars fall.', x: null, y: null, color: '#ddeeff' });
+    const count = rng.range(5, 11);
+    events.meteorShower = { streaks: [], impactScheduled: rng.chance(0.4), timer: 5 };
+    for (let s = 0; s < count; s++) {
+      const spawnDelay = rng.float(0, 3);
+      events.meteorShower.streaks.push({
+        x: rng.float(-20, CANVAS_W + 20),
+        y: rng.float(-5, 10),
+        vx: rng.float(25, 60) * (rng.chance(0.5) ? 1 : -1),
+        vy: rng.float(20, 45),
+        life: rng.float(0.6, 1.5),
+        maxLife: 0,
+        delay: spawnDelay,
+      });
+      events.meteorShower.streaks[events.meteorShower.streaks.length - 1].maxLife =
+        events.meteorShower.streaks[events.meteorShower.streaks.length - 1].life;
+    }
+  }
+  if (events.meteorShower) {
+    const ms = events.meteorShower;
+    ms.timer -= dt;
+    let anyAlive = false;
+    for (const s of ms.streaks) {
+      if (s.delay > 0) { s.delay -= dt; anyAlive = true; continue; }
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.life -= dt;
+      if (s.life > 0) anyAlive = true;
+    }
+    // Optional impact flash at end
+    if (ms.impactScheduled && ms.timer <= 0 && !ms.impactDone) {
+      ms.impactDone = true;
+      events.lightningFlash = 0.4;
+      const ix = rng.float(20, CANVAS_W - 20);
+      if (events.onStartFire && rng.chance(0.3)) events.onStartFire(ix, waterY - rng.range(2, 5), rng);
+    }
+    if (!anyAlive && ms.timer <= 0) events.meteorShower = null;
+  }
+
+  // ---- CROP DUSTER ----
+  const isIndustrialEra = (currentEraId || 1) >= 2;
+  if (!events.cropDuster && isIndustrialEra && isDay && rng.chance(0.0003 * dt)) {
+    const fromLeft = rng.chance(0.5);
+    if (obituaryState) addMoment(obituaryState, { text: 'a man flies overhead.', x: null, y: null, color: '#c8b88a' });
+    events.cropDuster = {
+      x: fromLeft ? -20 : CANVAS_W + 20,
+      y: waterY - rng.float(18, 30),
+      vx: (fromLeft ? 1 : -1) * rng.float(25, 40),
+      timer: 7,
+      puffs: [],
+      puffTimer: 0,
+    };
+  }
+  if (events.cropDuster) {
+    const cd = events.cropDuster;
+    cd.x += cd.vx * dt;
+    cd.timer -= dt;
+    cd.puffTimer -= dt;
+    if (cd.puffTimer <= 0) {
+      cd.puffTimer = rng.float(0.08, 0.18);
+      cd.puffs.push({
+        x: cd.x - Math.sign(cd.vx) * 4,
+        y: cd.y + 2,
+        vx: -Math.sign(cd.vx) * rng.float(0.5, 2),
+        vy: rng.float(-1, 2),
+        life: rng.float(1.5, 3),
+        maxLife: 0,
+      });
+      cd.puffs[cd.puffs.length - 1].maxLife = cd.puffs[cd.puffs.length - 1].life;
+    }
+    // Update puffs
+    for (let i = cd.puffs.length - 1; i >= 0; i--) {
+      const p = cd.puffs[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0) cd.puffs.splice(i, 1);
+    }
+    // Scare nearby wildlife via callback
+    if (events.onCropDusterPass) events.onCropDusterPass(cd.x, cd.y, dt, rng);
+    // Done when off screen
+    if (cd.timer <= 0 || cd.x < -40 || cd.x > CANVAS_W + 40) events.cropDuster = null;
+  }
+
+  // ---- PLAGUE ----
+  if (!events.plague && rng.chance(0.00015 * dt)) {
+    // Find a random wildlife victim to start the spread
+    const allGators = [];
+    for (const [id, tr, gator] of world.query('transform', 'gator')) {
+      if (gator.stage !== 'egg') allGators.push({ id, tr, gator });
+    }
+    if (allGators.length > 0) {
+      const victim = rng.pick(allGators);
+      if (!victim.gator.sick) {
+        victim.gator.sick = true;
+        victim.gator.sickTimer = rng.float(30, 60);
+        if (obituaryState) addMoment(obituaryState, { text: 'a sickness moves through the swamp.', x: null, y: null, color: '#88bb55' });
+        events.plague = { active: true, drips: [], spreadTimer: rng.float(8, 15) };
+      }
+    }
+  }
+  if (events.plague) {
+    const plague = events.plague;
+    plague.spreadTimer -= dt;
+    let anySick = false;
+
+    // Spread to nearby gators
+    if (plague.spreadTimer <= 0) {
+      plague.spreadTimer = rng.float(8, 15);
+      const sickGators = [];
+      const healthyGators = [];
+      for (const [id, tr, gator] of world.query('transform', 'gator')) {
+        if (gator.stage === 'egg') continue;
+        if (gator.sick) sickGators.push({ id, tr, gator });
+        else healthyGators.push({ id, tr, gator });
+      }
+      for (const sg of sickGators) {
+        for (const hg of healthyGators) {
+          if (Math.abs(sg.tr.x - hg.tr.x) < 20 && rng.chance(0.35)) {
+            hg.gator.sick = true;
+            hg.gator.sickTimer = rng.float(30, 60);
+            break;
+          }
+        }
+      }
+    }
+
+    // Tick sick gators — slow movement, damage over time, drip particles
+    for (const [id, tr, gator] of world.query('transform', 'gator')) {
+      if (!gator.sick) continue;
+      anySick = true;
+      gator.sickTimer -= dt;
+      // Slow them down
+      tr.vx *= Math.pow(0.95, dt * 10);
+      // Occasional damage
+      if (rng.chance(0.02 * dt)) {
+        gator.health = Math.max(0, (gator.health || 1) - 0.03);
+        if (gator.health <= 0) {
+          if (obituaryState) logDeath(obituaryState, { gator, cause: 'plague', time: simTime });
+          world.kill(id);
+        }
+      }
+      // Spawn drip particle
+      if (rng.chance(0.8 * dt)) {
+        plague.drips.push({
+          x: tr.x + rng.float(-3, 3),
+          y: tr.y - 6,
+          vy: rng.float(4, 8),
+          life: rng.float(0.4, 1),
+        });
+      }
+      // Recovery
+      if (gator.sickTimer <= 0 && rng.chance(0.3 * dt)) {
+        gator.sick = false;
+        delete gator.sickTimer;
+      }
+    }
+    // Update drips
+    for (let i = plague.drips.length - 1; i >= 0; i--) {
+      const d = plague.drips[i];
+      d.y += d.vy * dt;
+      d.life -= dt;
+      if (d.life <= 0) plague.drips.splice(i, 1);
+    }
+    if (!anySick) {
+      if (obituaryState) addMoment(obituaryState, { text: 'the sickness has passed.', x: null, y: null, color: '#aaddaa' });
+      events.plague = null;
+    }
+  }
+
+  // ---- SWAMP GAS GEYSER ----
+  if (!events.swampGeyser && rng.chance(0.001 * dt)) {
+    const geyserX = rng.float(10, CANVAS_W - 10);
+    if (obituaryState) addMoment(obituaryState, { text: 'the swamp coughs.', x: null, y: null, color: '#88cc66' });
+    events.swampGeyser = {
+      x: geyserX,
+      y: waterY - 1,
+      timer: rng.float(3, 5),
+      particles: [],
+      particleTimer: 0,
+      ignited: false,
+    };
+    // Check for nearby fire — ignite if close
+    if (events.onCheckNearbyFire) {
+      const nearFire = events.onCheckNearbyFire(geyserX, waterY, 18);
+      if (nearFire) {
+        events.swampGeyser.ignited = true;
+        events.lightningFlash = 0.5;
+        if (events.onExplosion) events.onExplosion();
+      }
+    }
+    // Scare wildlife near geyser
+    if (events.onGeyserScare) events.onGeyserScare(geyserX, waterY, 25);
+  }
+  if (events.swampGeyser) {
+    const gy = events.swampGeyser;
+    gy.timer -= dt;
+    gy.particleTimer -= dt;
+    if (gy.particleTimer <= 0) {
+      gy.particleTimer = rng.float(0.04, 0.1);
+      const ignited = gy.ignited;
+      gy.particles.push({
+        x: gy.x + rng.float(-3, 3),
+        y: gy.y,
+        vx: rng.float(-4, 4),
+        vy: -rng.float(8, 18),
+        life: rng.float(0.4, 1.2),
+        maxLife: 0,
+        ignited,
+      });
+      gy.particles[gy.particles.length - 1].maxLife = gy.particles[gy.particles.length - 1].life;
+    }
+    for (let i = gy.particles.length - 1; i >= 0; i--) {
+      const p = gy.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.pow(0.9, dt * 10);
+      p.vy *= Math.pow(0.95, dt * 10);
+      p.life -= dt;
+      if (p.life <= 0) gy.particles.splice(i, 1);
+    }
+    if (gy.timer <= 0) events.swampGeyser = null;
+  }
+
   // Trigger new events — frequently, this swamp is chaotic
   if (events.eventTimer <= 0) {
     events.eventTimer = rng.float(15, 40);
-    triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState);
+    triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState, currentEraId);
   }
 
   // Storm lightning — frequent and dramatic during storms
@@ -498,7 +847,7 @@ export function updateEvents(events, world, dt, rng, waterY, simTime, env, obitu
   }
 }
 
-function triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState) {
+function triggerRandomEvent(events, world, rng, waterY, simTime, env, obituaryState, currentEraId) {
   const isNight = env.timeOfDay < 0.2 || env.timeOfDay > 0.8;
 
   const roll = rng.random();
@@ -534,12 +883,17 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env, obituarySt
         });
       }
     } else if (roll < 0.42 && !events.eclipse) {
-      // Eclipse
+      // Enhanced Eclipse — longer, more dramatic, stars visible, wildlife pauses
+      const duration = rng.float(18, 28);
       events.eclipse = {
-        timer: rng.float(8, 15),
+        timer: duration,
+        totalDuration: duration,
         progress: 0,
         x: CANVAS_W * 0.5 + rng.float(-30, 30),
         y: rng.float(5, 20),
+        wildlifePaused: false,
+        wildlifePauseTimer: 0,
+        announced: false,
       };
     } else if (roll < 0.52 && events.onStartFire) {
       // Wildfire — spontaneous combustion in dry season
@@ -603,6 +957,7 @@ function triggerRandomEvent(events, world, rng, waterY, simTime, env, obituarySt
         craterDebris: [],
       };
     }
+    // roll 0.97–1.0 falls through (no-op — keeps swamp quiet)
   }
   // end triggerRandomEvent
 }
@@ -657,6 +1012,125 @@ function spawnLightning(events, rng, waterY, world, obituaryState, simTime) {
 
 // --- Render Events ---
 export function renderEvents(ctx, events, simTime, waterY) {
+  // Gator Brawl — splash particles
+  if (events.gatorBrawl && events.gatorBrawl.phase !== 'flee') {
+    const brawl = events.gatorBrawl;
+    for (const sp of brawl.splashParticles) {
+      const alpha = Math.min(1, sp.life * 3);
+      ctx.fillStyle = `rgba(120, 200, 160, ${alpha})`;
+      ctx.fillRect(Math.floor(sp.x), Math.floor(sp.y), 1, 1);
+    }
+    // Brawl indicator — small impact stars during fight phase
+    if (brawl.phase === 'fight' && brawl.idA !== null) {
+      const flashOn = Math.sin(simTime * 20) > 0;
+      if (flashOn) {
+        // We don't have gator positions here — splash center approximation via particles
+        if (brawl.splashParticles.length > 0) {
+          const sp0 = brawl.splashParticles[0];
+          ctx.fillStyle = `rgba(255, 220, 80, 0.7)`;
+          ctx.fillRect(Math.floor(sp0.x) - 1, Math.floor(sp0.y) - 3, 1, 1);
+          ctx.fillRect(Math.floor(sp0.x) + 1, Math.floor(sp0.y) - 3, 1, 1);
+        }
+      }
+    }
+  }
+
+  // Meteor Shower — diagonal streaks
+  if (events.meteorShower) {
+    for (const s of events.meteorShower.streaks) {
+      if (s.delay > 0) continue;
+      if (s.life <= 0) continue;
+      const alpha = Math.min(1, (s.life / s.maxLife) * 2);
+      const sx = Math.floor(s.x);
+      const sy = Math.floor(s.y);
+      // Head — bright white-yellow
+      ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`;
+      ctx.fillRect(sx, sy, 1, 1);
+      // Trail — 3-pixel fading
+      const norm = Math.sqrt(s.vx * s.vx + s.vy * s.vy) || 1;
+      const tx1 = sx - Math.round(s.vx / norm * 2);
+      const ty1 = sy - Math.round(s.vy / norm * 2);
+      const tx2 = sx - Math.round(s.vx / norm * 4);
+      const ty2 = sy - Math.round(s.vy / norm * 4);
+      ctx.fillStyle = `rgba(255, 230, 150, ${alpha * 0.6})`;
+      ctx.fillRect(tx1, ty1, 1, 1);
+      ctx.fillStyle = `rgba(255, 200, 100, ${alpha * 0.3})`;
+      ctx.fillRect(tx2, ty2, 1, 1);
+    }
+  }
+
+  // Crop Duster — biplane silhouette + pesticide puffs
+  if (events.cropDuster) {
+    const cd = events.cropDuster;
+    const cx = Math.floor(cd.x);
+    const cy = Math.floor(cd.y);
+    const facingRight = cd.vx > 0;
+    // Fuselage
+    ctx.fillStyle = '#444444';
+    ctx.fillRect(cx - 5, cy, 11, 3);
+    // Wing
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(cx - 7, cy + 1, 15, 1);
+    // Tail fin
+    ctx.fillStyle = '#555555';
+    ctx.fillRect(facingRight ? cx - 5 : cx + 3, cy - 2, 2, 2);
+    // Propeller (flicker)
+    ctx.fillStyle = '#666666';
+    const propSide = facingRight ? cx + 6 : cx - 7;
+    if (Math.sin(simTime * 30) > 0) {
+      ctx.fillRect(propSide, cy - 2, 1, 5);
+    } else {
+      ctx.fillRect(propSide - 2, cy + 1, 5, 1);
+    }
+    // Pesticide puffs
+    for (const p of cd.puffs) {
+      const frac = p.life / p.maxLife;
+      const alpha = frac * 0.45;
+      const r = Math.floor(2 + (1 - frac) * 4);
+      ctx.fillStyle = `rgba(180, 220, 140, ${alpha})`;
+      ctx.fillRect(Math.floor(p.x) - r, Math.floor(p.y) - r, r * 2 + 1, r * 2 + 1);
+      ctx.fillStyle = `rgba(200, 240, 160, ${alpha * 0.5})`;
+      ctx.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 3);
+    }
+  }
+
+  // Plague — green drip particles above sick gators
+  if (events.plague) {
+    for (const d of events.plague.drips) {
+      const alpha = Math.min(1, d.life * 2);
+      ctx.fillStyle = `rgba(100, 200, 80, ${alpha})`;
+      ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 2);
+    }
+  }
+
+  // Swamp Gas Geyser — erupting green plume
+  if (events.swampGeyser) {
+    const gy = events.swampGeyser;
+    for (const p of gy.particles) {
+      const frac = p.life / p.maxLife;
+      const alpha = frac * 0.7;
+      if (p.ignited) {
+        // Fire colors
+        ctx.fillStyle = `rgba(255, ${Math.floor(80 + frac * 120)}, 20, ${alpha})`;
+      } else {
+        // Green gas
+        ctx.fillStyle = `rgba(${Math.floor(60 + frac * 60)}, 200, 60, ${alpha})`;
+      }
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 2, 2);
+      // Outer glow
+      ctx.fillStyle = p.ignited
+        ? `rgba(255, 150, 30, ${alpha * 0.25})`
+        : `rgba(80, 255, 80, ${alpha * 0.2})`;
+      ctx.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 4, 4);
+    }
+    // Ground burst indicator
+    const burstPulse = 0.5 + 0.5 * Math.sin(simTime * 12);
+    ctx.fillStyle = gy.ignited
+      ? `rgba(255, 140, 20, ${burstPulse * 0.5})`
+      : `rgba(80, 220, 60, ${burstPulse * 0.4})`;
+    ctx.fillRect(Math.floor(gy.x) - 2, Math.floor(gy.y), 5, 2);
+  }
+
   // Lightning bolts
   for (const bolt of events.lightningBolts) {
     const alpha = Math.min(1, bolt.life * 4);
@@ -875,37 +1349,60 @@ export function renderEvents(ctx, events, simTime, waterY) {
     }
   }
 
-  // Eclipse — renders sun at its real position with moon crossing over
+  // Eclipse — renders sun at its real position with moon crossing over (enhanced)
   if (events.eclipse) {
     const e = events.eclipse;
-    const progress = Math.sin(e.progress * Math.PI); // 0 -> 1 -> 0
-    // Darken sky
-    ctx.fillStyle = `rgba(0, 0, 20, ${progress * 0.5})`;
+    const progress = e.progress || 0; // 0 → 1 → fade at end via timer
+    const totalDur = e.totalDuration || 20;
+    const endFade = Math.min(1, e.timer / (totalDur * 0.15)); // fade out last 15%
+    const eff = progress * endFade; // effective intensity
+    // Dark blue sky tint — more dramatic than before
+    ctx.fillStyle = `rgba(0, 5, 35, ${eff * 0.72})`;
     ctx.fillRect(0, 0, CANVAS_W, waterY);
+    // Stars become visible during totality
+    if (e._showStars) {
+      const starAlpha = Math.min(1, (eff - 0.6) * 2.5) * 0.85;
+      // Use deterministic star positions seeded from eclipse x
+      const seed = Math.floor(e.x || 0) + 77;
+      for (let si = 0; si < 18; si++) {
+        const sx = Math.floor(((seed * (si + 1) * 1637) % CANVAS_W + CANVAS_W) % CANVAS_W);
+        const sy = Math.floor(((seed * (si + 3) * 2311) % (waterY * 0.7) + 1));
+        const twinkle = 0.5 + 0.5 * Math.sin(simTime * 3 + si * 1.3);
+        ctx.fillStyle = `rgba(255, 255, 240, ${starAlpha * twinkle})`;
+        ctx.fillRect(sx, sy, 1, 1);
+      }
+    }
     // Calculate real sun position (same math as renderCelestial)
-    const tod = e._tod || 0.5; // fallback to noon
+    const tod = e._tod || 0.5;
     const skyTop = 4;
     const skyBottom = Math.floor(waterY * 0.35);
     const dayP = Math.max(0, Math.min(1, (tod - 0.22) / 0.56));
     const sunX = Math.floor(CANVAS_W * 0.25 + dayP * CANVAS_W * 0.5);
     const sunArc = Math.sin(dayP * Math.PI);
     const sunY = Math.floor(skyBottom - sunArc * (skyBottom - skyTop));
-    // Sun
-    ctx.fillStyle = '#ffdd44';
+    // Sun (dim during eclipse)
+    const sunAlpha = 1 - eff * 0.7;
+    ctx.fillStyle = `rgba(255, 221, 68, ${sunAlpha})`;
     ctx.fillRect(sunX - 2, sunY - 2, 5, 5);
-    ctx.fillStyle = '#ffee88';
+    ctx.fillStyle = `rgba(255, 238, 136, ${sunAlpha})`;
     ctx.fillRect(sunX - 1, sunY - 1, 3, 3);
     // Moon overlay
-    const moonOffset = Math.floor((1 - progress) * 6 - 3);
+    const moonOffset = Math.floor((1 - eff) * 6 - 3);
     ctx.fillStyle = '#111122';
     ctx.fillRect(sunX - 2 + moonOffset, sunY - 2, 5, 5);
     // Corona when near total
-    if (progress > 0.7) {
-      ctx.fillStyle = `rgba(255, 200, 100, ${(progress - 0.7) * 2})`;
+    if (eff > 0.7) {
+      ctx.fillStyle = `rgba(255, 200, 100, ${(eff - 0.7) * 2})`;
       ctx.fillRect(sunX - 3, sunY, 1, 1);
       ctx.fillRect(sunX + 3, sunY, 1, 1);
       ctx.fillRect(sunX, sunY - 3, 1, 1);
       ctx.fillRect(sunX, sunY + 3, 1, 1);
+      // Extra corona rays
+      ctx.fillStyle = `rgba(255, 180, 80, ${(eff - 0.7) * 1.2})`;
+      ctx.fillRect(sunX - 4, sunY - 1, 1, 1);
+      ctx.fillRect(sunX + 4, sunY - 1, 1, 1);
+      ctx.fillRect(sunX - 1, sunY + 4, 1, 1);
+      ctx.fillRect(sunX + 1, sunY - 4, 1, 1);
     }
   }
 

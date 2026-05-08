@@ -6,6 +6,7 @@
 import { distance } from '../utils/math.js';
 import { playTailSlap, playBellow, playGrowl, playMate } from '../audio.js';
 import { spawnTailSlapSplash, spawnBellowRings, spawnBellowDust } from '../game/particles.js';
+import { applyHoverRadius } from '../game/unlocks.js';
 
 // Wildlife the player cannot hunt (flying, intangible, dangerous vehicles)
 const NON_EDIBLE_WILDLIFE = new Set([
@@ -81,7 +82,7 @@ function hitTestGators(cx, cy) {
 function hitTestWildlife(cx, cy) {
   if (!_wildlifeState) return null;
   let best = null;
-  let bestDist = 8;
+  let bestDist = applyHoverRadius(8);
   for (const w of _wildlifeState.wildlife) {
     if (!w.alive) continue;
     const d = distance(cx, cy, w.x, w.y);
@@ -96,7 +97,7 @@ function hitTestWildlife(cx, cy) {
 // Hit-test prey entities
 function hitTestPrey(cx, cy) {
   let best = null;
-  let bestDist = 8;
+  let bestDist = applyHoverRadius(8);
   for (const [id, tr, prey] of _world.query('transform', 'prey')) {
     if (!prey.alive) continue;
     const d = distance(cx, cy, tr.x, tr.y);

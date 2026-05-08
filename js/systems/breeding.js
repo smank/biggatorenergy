@@ -4,10 +4,11 @@ import { GATOR_STAGES } from '../sprites/gator-sprites.js';
 import { blendColors } from '../utils/colors.js';
 import { distance } from '../utils/math.js';
 import { addMoment } from '../game/obituary.js';
+import { applyEggIncubationRate, applyClutchSize } from '../game/unlocks.js';
 
 const MATE_COOLDOWN = 25;       // seconds between mating attempts
 const PREGNANCY_DURATION = 10;  // seconds of pregnancy
-const EGG_INCUBATION = 8;       // seconds for eggs to hatch
+const EGG_INCUBATION = 8;       // seconds for eggs to hatch (base; modified by fast_eggs unlock)
 const COURTSHIP_RANGE = 45;     // pixels
 const COURTSHIP_DURATION = 3;   // seconds of courtship before mating
 
@@ -123,14 +124,15 @@ export function breedingSystem(world, dt, rng, waterY, spawnGatorFromParents, ob
       if (gator.pregnancyTimer <= 0) {
         // Lay eggs — create nest mound
         gator.isPregnant = false;
-        const clutchSize = Math.floor((gator.traits?.fertility || 0.5) * 4) + rng.range(1, 3);
+        const rawClutch = Math.floor((gator.traits?.fertility || 0.5) * 4) + rng.range(1, 3);
+        const clutchSize = applyClutchSize(rawClutch);
 
         const nestLineageId = gator.lineage?.dynastyId || gator.lineageId || gator.mateLineageId || null;
         gator.nest = {
           x: tr.x,
           y: waterY - 2,
           eggs: clutchSize,
-          hatchTimer: EGG_INCUBATION,
+          hatchTimer: applyEggIncubationRate(EGG_INCUBATION),
           parentTraits: gator.traits,
           mateTraits: gator.mateTraits,
           generation: gator.generation,

@@ -19,12 +19,18 @@ import { createParticleState, spawnDeathParticles, updateDeathParticles, renderD
 import { WILDLIFE_TYPES, CRYPTID_TYPES, FOOD_CHAIN, createWildlifeState, spawnWildlife, spawnAlienSurvivor, updateWildlife, renderWildlife } from './game/wildlife.js';
 import { MODE_TERRARIUM, MODE_DYNASTY, randomGatorName, randomDynastyName, countLivingBloodline, loadLineagePoints, saveLineagePoints, updateEraClock, renderEraHUD, initEraDynasty, getCurrentEra, ERA_FLAVOR } from './game/dynasty.js';
 import { initInspector, openInspectorAt, openInspectorForGator, closeInspector } from './systems/inspector.js';
-import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls } from './game/unlocks.js';
+import { UNLOCKS, purchase, loadPurchasedUnlocks, applyUnlocksToFounderRoll, applyUnlocksToFounderColors, getMaxRerolls, isStartInEra2, getStartMealCount, getLegacyRenownMultiplier } from './game/unlocks.js';
 import { loadObituary, updateMoments, renderMoments, renderObituaryPanel, addMoment } from './game/obituary.js';
 import { attachLineage } from './game/dynasty.js';
 import { buildTree, getLivingSuccessors, setPlayerGator } from './systems/lineage.js';
 import { initPlayerControl, dispatchClick, dispatchHold, setPlayerControlDynasty, setPlayerControlWildlife, hoverState } from './systems/playerControl.js';
 import { createGoalState, loadGoals, saveGoals, updateGoals, activeGoal } from './game/goals.js';
+import {
+  ACHIEVEMENTS, loadAchievementState, saveAchievementState,
+  checkAchievements, recordKill, recordEgg, recordDynastyStart, recordLP,
+  isUnlocked, getUnlockedCount, getTotalCount,
+  renderAchievementsPanel,
+} from './game/achievements.js';
 
 // --- Seed ---
 // Priority: URL hash > localStorage last seed > new random seed
@@ -368,6 +374,71 @@ events.onTornadoPull = (tx, ty, range, dt, rng) => {
   }
 };
 
+// Crop duster — scare nearby wildlife and deal minor hp damage
+events.onCropDusterPass = (planeX, planeY, dt, rng) => {
+  for (const w of wildlifeState.wildlife) {
+    if (!w.alive) continue;
+    const dx = Math.abs(w.x - planeX);
+    const dy = Math.abs(w.y - planeY);
+    if (dx < 40 && dy < 30) {
+      // Flee away from plane
+      const fleeDir = Math.sign(w.x - planeX) || (rng.chance(0.5) ? 1 : -1);
+      w.vx += fleeDir * 25 * dt;
+      // Birds/butterflies/dragonflies take damage
+      if (w.type === 'bird' || w.type === 'butterfly' || w.type === 'egret' || w.type === 'pelican' || w.type === 'osprey') {
+        if (rng.chance(0.3 * dt)) {
+          w.hp = Math.max(0, (w.hp || 1) - 0.3);
+          if (w.hp <= 0) w.alive = false;
+        }
+      }
+    }
+  }
+};
+
+// Eclipse wildlife pause — all AI gators briefly face up / freeze
+events.onEclipsePause = () => {
+  for (const [id, tr, gator] of world.query('transform', 'gator')) {
+    if (gator.isPlayer) continue;
+    if (gator.stage === 'egg') continue;
+    gator._eclipseFrozen = true;
+    gator._eclipseFreezeTimer = 5;
+    tr.vx = 0;
+    tr.vy = 0;
+  }
+  // Wildlife pause too
+  for (const w of wildlifeState.wildlife) {
+    if (!w.alive) continue;
+    w._eclipseFrozen = true;
+    w._eclipseFreezeTimer = 5;
+    w.vx = 0;
+    w.vy = 0;
+  }
+};
+
+// Swamp geyser — scare nearby wildlife
+events.onGeyserScare = (geyserX, geyserY, range) => {
+  for (const w of wildlifeState.wildlife) {
+    if (!w.alive) continue;
+    const dist = Math.sqrt((w.x - geyserX) ** 2 + (w.y - geyserY) ** 2);
+    if (dist < range) {
+      const fleeDir = Math.sign(w.x - geyserX) || 1;
+      w.vx += fleeDir * 18;
+      w.vy -= 5;
+    }
+  }
+};
+
+// Swamp geyser — check for nearby fire (fire state query)
+events.onCheckNearbyFire = (x, y, radius) => {
+  if (!fireState || !fireState.fires) return false;
+  for (const f of fireState.fires) {
+    if (!f.alive) continue;
+    const dist = Math.sqrt((f.x - x) ** 2 + (f.y - y) ** 2);
+    if (dist < radius) return true;
+  }
+  return false;
+};
+
 // --- Persistence ---
 const persistence = createPersistence(seed);
 
@@ -493,6 +564,13 @@ function spawnGatorFromParents(rng, pos, motherTraits, fatherTraits, parentGen, 
   }
 
   world.add(id, 'gator', gatorComp);
+
+  // Achievement tracking: record each hatched egg (lineage eggs only)
+  if (lineageId && achievementState) {
+    recordEgg(achievementState);
+    saveAchievementState(achievementState);
+  }
+
   return id;
 }
 
@@ -512,6 +590,7 @@ const obituaryState = loadObituary();
 let gameMode = MODE_TERRARIUM; // default for fresh/terrarium starts
 let dynasty = null;            // { id, name, foundedAt, founderNames, era, eraClock, gensBonusReached } when in dynasty mode
 let lineagePoints = loadLineagePoints();
+let achievementState = loadAchievementState(); // lifetime, persistent across dynasties
 let dynastyFounderIds = [];    // ids of founders, tracked for extinction check
 let extinctionGraceTimer = 0;  // don't trigger game-over during the first few seconds of a new dynasty
 let goalState = null;          // goals system state for dynasty mode
@@ -1903,9 +1982,18 @@ function commitFounders() {
   extinctionGraceTimer = 30; // 30s of grace so a stray event doesn't end it frame 1
   dynastyFounderIds = [];
   goalState = createGoalState(); // fresh goal state for new dynasty
-  setEraAmbient(1); // start era 1 ambient layer
+  recordDynastyStart(achievementState); // lifetime achievement tracking
+
+  // start_in_era_2: skip Primordial, open in Industrial era
+  const startEra = isStartInEra2() ? 2 : 1;
+  dynasty.era = startEra;
+  dynasty.eraReached = startEra;
+  setEraAmbient(startEra);
 
   const controlSex = p.controlSex || 'male';
+
+  // start_with_kill_count: give founders a meal-count head-start
+  const startMeals = getStartMealCount();
 
   const maleId = spawnGator(rng, 'adult', {
     x: CANVAS_W * 0.4, y: waterY - 3,
@@ -1920,6 +2008,27 @@ function commitFounders() {
     isPlayer: controlSex === 'female',
   });
   dynastyFounderIds.push(maleId, femaleId);
+
+  // Apply meal bonus to founders if unlocked
+  if (startMeals > 0) {
+    const maleGator = world.get(maleId, 'gator');
+    const femaleGator = world.get(femaleId, 'gator');
+    if (maleGator) maleGator.mealCount = startMeals;
+    if (femaleGator) femaleGator.mealCount = startMeals;
+  }
+
+  // start_with_juvenile: spawn one juvenile of the bloodline at founding
+  if (loadPurchasedUnlocks().has('start_with_juvenile')) {
+    const jSex = rng.chance(0.5) ? 'male' : 'female';
+    spawnGator(rng, 'juvenile', {
+      x: CANVAS_W * 0.48, y: waterY - 2,
+      sex: jSex,
+      lineageId: p.dynastyId,
+      name: randomGatorName(rng, jSex),
+      traits: { ...p.male.traits },
+    });
+  }
+
   dynasty.playerGatorId = controlSex === 'male' ? maleId : femaleId;
   dynasty.mateGatorId   = controlSex === 'male' ? femaleId : maleId;
 
@@ -2083,25 +2192,155 @@ if (gameMode === MODE_DYNASTY && dynasty && familyTreeToggle) {
 
 function showDynastyGameOver() {
   dynastyExtinct = true;
-  // Tally stats for the obituary
+
+  // ---- Base LP reward (unchanged formula) ----
+  const lpEarned = Math.max(1, maxGeneration * 10 + Math.floor(simTime / 30));
+  lineagePoints += lpEarned;
+  saveLineagePoints(lineagePoints);
+
+  // ---- Achievement: extinction / dynasty-died-young (fire once at game-over) ----
+  if (achievementState) {
+    const achExtCallbacks = {
+      onUnlock(ach) {
+        if (dynasty) {
+          dynasty._newAchievementsThisRun = dynasty._newAchievementsThisRun || [];
+          dynasty._newAchievementsThisRun.push(ach.id);
+        }
+      },
+      onAwardLP(amount) {
+        lineagePoints += amount;
+        saveLineagePoints(lineagePoints);
+        recordLP(achievementState, amount);
+      },
+      addMoment(_t) {},
+    };
+    checkAchievements(achievementState, {
+      dynasty,
+      world,
+      simTime,
+      maxGeneration,
+      obituary: obituaryState?.entries || [],
+      dynastyJustEnded: true,
+      seenCryptid: false,
+      fightWinThisFrame: false,
+      mateJustDied: false,
+      events,
+    }, achExtCallbacks);
+    saveAchievementState(achievementState);
+  }
+
+  // ---- Compute rich post-mortem stats ----
+  const entries = obituaryState?.entries || [];
+  const dynastyId = dynasty?.id;
+
+  // Filter to this dynasty's bloodline entries
+  const bloodlineEntries = dynastyId
+    ? entries.filter(e => e.lineageId === dynastyId)
+    : [];
+
+  // Total kills this dynasty (sum mealCounts from living gators + deceased recorded in obit)
+  // Living gators won't be in the obit yet — scan world for dynasty gators
+  let dynastyKills = achievementState?.stats?.dynastyKills || 0;
+  // Also count from living bloodline gators that are about to be wiped
+  for (const [, , g] of world.query('transform', 'gator')) {
+    if (g.lineageId === dynastyId) dynastyKills += (g.mealCount || 0);
+  }
+
+  // Hatchlings produced this dynasty
+  const hatchlingsProduced = achievementState?.stats?.dynastyEggs || 0;
+
+  // Oldest gator by age (from bloodline obituary entries)
+  let oldestEntry = null;
+  for (const e of bloodlineEntries) {
+    if (!oldestEntry || e.age > oldestEntry.age) oldestEntry = e;
+  }
+  // Also check living bloodline gators
+  for (const [, , g] of world.query('transform', 'gator')) {
+    if (g.lineageId !== dynastyId) continue;
+    const ageDays = Math.floor((g.age || 0) / 60);
+    if (!oldestEntry || ageDays > oldestEntry.age) {
+      oldestEntry = { name: g.name || '—', age: ageDays };
+    }
+  }
+
+  // Greatest hunter (most mealCount in obit — approximated; living gators tracked above)
+  // We track mealCount in the obituary? No — logDeath doesn't record mealCount.
+  // We can approximate by using achievementState or just say "—"
+  // Decision: show player gator's mealCount if available (it's the most tracked)
+  let greatestHunterName = '—';
+  let greatestHunterKills = 0;
+  if (dynasty?.playerGatorId) {
+    const pg = world.get(dynasty.playerGatorId, 'gator');
+    if (pg && (pg.mealCount || 0) > 0) {
+      greatestHunterName = pg.name || '—';
+      greatestHunterKills = pg.mealCount;
+    }
+  }
+
+  // Eras reached
+  const erasReached = dynasty?.era || 1;
+  const eraLabels = ['I', 'II', 'III', 'IV', 'V'];
+  const erasStr = eraLabels.slice(0, erasReached).join(', ');
+
+  // Days lived (simTime / 60 = sim-days; 1 sim-day = 60 sim-seconds)
+  const daysLived = Math.floor(simTime / 60);
+
+  // Founders
+  const founderStr = (dynasty?.founderNames || []).join(' · ') || '—';
+
+  // Newly unlocked achievements this run
+  const newAchs = (dynasty?._newAchievementsThisRun || []).slice(0, 5);
+  const newAchTitles = newAchs.map(id => {
+    const a = ACHIEVEMENTS.find(x => x.id === id);
+    return a ? a.title : id;
+  });
+
   dynastyStats = {
     name: dynasty?.name || 'dynasty',
     generationsReached: maxGeneration,
-    daysLived: Math.floor(simTime / 60), // rough sim-days proxy
-    lineagePointsEarned: Math.max(1, maxGeneration * 10 + Math.floor(simTime / 30)),
+    daysLived,
+    lineagePointsEarned: lpEarned,
   };
-  lineagePoints += dynastyStats.lineagePointsEarned;
-  saveLineagePoints(lineagePoints);
+
   if (!gameOverOverlay) return;
+
+  // ---- Render: clear old stats, build post-mortem ----
   const statsEl = document.getElementById('game-over-stats');
-  if (statsEl) {
-    statsEl.innerHTML =
-      `<div><span class="bge-label">dynasty:</span> <span class="bge-value">${dynastyStats.name}</span></div>` +
-      `<div><span class="bge-label">founders:</span> <span class="bge-value">${(dynasty?.founderNames || []).join(' · ')}</span></div>` +
-      `<div><span class="bge-label">generations:</span> <span class="bge-value">${dynastyStats.generationsReached}</span></div>` +
-      `<div><span class="bge-label">days lived:</span> <span class="bge-value">${dynastyStats.daysLived}</span></div>` +
-      `<div><span class="bge-label">lineage points:</span> <span class="bge-value">+${dynastyStats.lineagePointsEarned} (${lineagePoints} total)</span></div>`;
+  if (statsEl) statsEl.innerHTML = '';
+
+  const pmEl = document.getElementById('game-over-postmortem');
+  if (pmEl) {
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const row = (label, value) =>
+      `<div class="pm-row"><span class="pm-label">${esc(label)}</span><span class="pm-value">${esc(value)}</span></div>`;
+
+    pmEl.innerHTML = `
+      <div class="pm-dynasty">${esc(dynasty?.name || 'dynasty')}</div>
+      ${row('founders', founderStr)}
+      ${row('eras reached', erasStr)}
+      ${row('generations', maxGeneration)}
+      ${row('days lived', daysLived)}
+      ${row('total kills', dynastyKills > 0 ? dynastyKills : '—')}
+      ${row('hatchlings', hatchlingsProduced > 0 ? hatchlingsProduced : '—')}
+      ${oldestEntry ? row('oldest', `${oldestEntry.name || '—'}, ${Math.floor(oldestEntry.age)}d`) : ''}
+      ${greatestHunterKills > 0 ? row('greatest hunter', `${greatestHunterName}, ${greatestHunterKills} kills`) : ''}
+      <hr class="pm-divider"/>
+      <div class="pm-lp">+${lpEarned} lp this run</div>
+      <div class="pm-lp-total">total: ${lineagePoints} lp</div>`;
   }
+
+  // ---- New achievements unlocked ----
+  const achEl = document.getElementById('game-over-achievements');
+  if (achEl) {
+    if (newAchTitles.length > 0) {
+      achEl.classList.remove('hidden');
+      achEl.innerHTML = `<div class="new-ach-label">achievements unlocked:</div>` +
+        newAchTitles.map(t => `<div class="new-ach-item">${t}</div>`).join('');
+    } else {
+      achEl.classList.add('hidden');
+    }
+  }
+
   gameOverOverlay.classList.remove('hidden');
 }
 
@@ -2163,18 +2402,32 @@ function closeUnlocksShop() {
   shopReturnOverlay = null;
 }
 
+const UNLOCK_CATEGORY_LABELS = {
+  traits:   'trait boosts',
+  start:    'starting conditions',
+  cosmetic: 'cosmetics',
+  gameplay: 'gameplay mods',
+  meta:     'meta',
+};
+
 function renderUnlocksShop() {
   const balanceEl = document.getElementById('unlocks-balance');
   const listEl = document.getElementById('unlocks-list');
   const feedbackEl = document.getElementById('unlocks-feedback');
   if (!listEl) return;
-  if (balanceEl) balanceEl.textContent = `${lineagePoints} lineage point${lineagePoints === 1 ? '' : 's'}`;
   if (feedbackEl) feedbackEl.textContent = '';
 
   const owned = loadPurchasedUnlocks();
-  const allOwned = UNLOCKS.every(u => owned.has(u.id));
+  const purchasedCount = UNLOCKS.filter(u => owned.has(u.id)).length;
+
+  if (balanceEl) {
+    balanceEl.textContent =
+      `${lineagePoints} lineage point${lineagePoints === 1 ? '' : 's'} · ${purchasedCount} / ${UNLOCKS.length} kept`;
+  }
+
   listEl.innerHTML = '';
 
+  const allOwned = UNLOCKS.every(u => owned.has(u.id));
   if (allOwned) {
     const empty = document.createElement('div');
     empty.className = 'unlock-row';
@@ -2184,50 +2437,69 @@ function renderUnlocksShop() {
     return;
   }
 
-  for (const unlock of UNLOCKS) {
-    const isOwned = owned.has(unlock.id);
-    const canAfford = lineagePoints >= unlock.cost;
-    const row = document.createElement('div');
-    row.className = 'unlock-row ' + (isOwned ? 'owned' : canAfford ? 'affordable' : 'unaffordable');
-    row.dataset.id = unlock.id;
+  // Group and render by category
+  const categoryOrder = ['traits', 'start', 'cosmetic', 'gameplay', 'meta'];
+  const byCategory = {};
+  for (const cat of categoryOrder) byCategory[cat] = [];
+  for (const u of UNLOCKS) {
+    const cat = u.category || 'traits';
+    (byCategory[cat] || byCategory['traits']).push(u);
+  }
 
-    const text = document.createElement('div');
-    text.className = 'unlock-text';
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'unlock-name';
-    nameDiv.textContent = unlock.name;
-    const descDiv = document.createElement('div');
-    descDiv.className = 'unlock-desc';
-    descDiv.textContent = unlock.description;
-    text.appendChild(nameDiv);
-    text.appendChild(descDiv);
+  for (const cat of categoryOrder) {
+    const group = byCategory[cat];
+    if (!group || group.length === 0) continue;
 
-    const right = document.createElement('div');
-    right.className = 'unlock-right';
+    const header = document.createElement('div');
+    header.className = 'unlock-category-header';
+    header.textContent = UNLOCK_CATEGORY_LABELS[cat] || cat;
+    listEl.appendChild(header);
 
-    if (isOwned) {
-      const badge = document.createElement('span');
-      badge.className = 'unlock-owned-badge';
-      badge.textContent = 'kept';
-      right.appendChild(badge);
-    } else {
-      const cost = document.createElement('span');
-      cost.className = 'unlock-cost';
-      cost.textContent = `${unlock.cost} lp`;
-      right.appendChild(cost);
-      if (canAfford) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'unlock-buy-btn';
-        btn.textContent = 'keep';
-        btn.dataset.buyId = unlock.id;
-        right.appendChild(btn);
+    for (const unlock of group) {
+      const isOwned = owned.has(unlock.id);
+      const canAfford = lineagePoints >= unlock.cost;
+      const row = document.createElement('div');
+      row.className = 'unlock-row ' + (isOwned ? 'owned' : canAfford ? 'affordable' : 'unaffordable');
+      row.dataset.id = unlock.id;
+
+      const text = document.createElement('div');
+      text.className = 'unlock-text';
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'unlock-name';
+      nameDiv.textContent = unlock.name;
+      const descDiv = document.createElement('div');
+      descDiv.className = 'unlock-desc';
+      descDiv.textContent = unlock.description;
+      text.appendChild(nameDiv);
+      text.appendChild(descDiv);
+
+      const right = document.createElement('div');
+      right.className = 'unlock-right';
+
+      if (isOwned) {
+        const badge = document.createElement('span');
+        badge.className = 'unlock-owned-badge';
+        badge.textContent = 'kept';
+        right.appendChild(badge);
+      } else {
+        const cost = document.createElement('span');
+        cost.className = 'unlock-cost';
+        cost.textContent = `${unlock.cost} lp`;
+        right.appendChild(cost);
+        if (canAfford) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'unlock-buy-btn';
+          btn.textContent = 'keep';
+          btn.dataset.buyId = unlock.id;
+          right.appendChild(btn);
+        }
       }
-    }
 
-    row.appendChild(text);
-    row.appendChild(right);
-    listEl.appendChild(row);
+      row.appendChild(text);
+      row.appendChild(right);
+      listEl.appendChild(row);
+    }
   }
 }
 
@@ -2256,6 +2528,32 @@ const titleVaultBtn = document.getElementById('title-vault-btn');
 if (titleVaultBtn) titleVaultBtn.onclick = () => openUnlocksShop('title');
 const gameOverVaultBtn = document.getElementById('game-over-vault-btn');
 if (gameOverVaultBtn) gameOverVaultBtn.onclick = () => openUnlocksShop('game-over');
+
+// --- Achievements overlay ---
+const achievementsOverlay = document.getElementById('achievements-overlay');
+const achievementsClose  = document.getElementById('achievements-close');
+
+function openAchievementsOverlay() {
+  renderAchievementsPanel(achievementState);
+  if (achievementsOverlay) achievementsOverlay.classList.remove('hidden');
+}
+function closeAchievementsOverlay() {
+  if (achievementsOverlay) achievementsOverlay.classList.add('hidden');
+}
+
+const titleAchBtn    = document.getElementById('title-ach-btn');
+const gameOverAchBtn = document.getElementById('game-over-ach-btn');
+if (titleAchBtn)    titleAchBtn.onclick    = openAchievementsOverlay;
+if (gameOverAchBtn) gameOverAchBtn.onclick = openAchievementsOverlay;
+if (achievementsClose) achievementsClose.onclick = closeAchievementsOverlay;
+achievementsOverlay?.addEventListener('click', (e) => {
+  if (e.target === achievementsOverlay) closeAchievementsOverlay();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && achievementsOverlay && !achievementsOverlay.classList.contains('hidden')) {
+    closeAchievementsOverlay();
+  }
+});
 
 // Boot flow:
 // 1. If a "new run" intent was stashed by the title screen (via reload), honor it.
@@ -2389,6 +2687,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { _dismissIntroTutorial(); }
 });
 
+// --- Achievement helpers ---
+// Track mealCounts per gator entity so we can detect new kills each frame.
+const _prevMealCounts = new Map(); // entityId → last known mealCount
+// Eggs are recorded inside spawnGatorFromParents via recordEgg(achievementState).
+
 // --- Game Loop ---
 let lastTime = 0;
 let gameOver = false;
@@ -2464,6 +2767,32 @@ function gameLoop(timestamp) {
     foodSpawnTimer = rng.float(FOOD_SPAWN_MIN, FOOD_SPAWN_MAX) / env.foodMultiplier;
   }
 
+  // Eclipse freeze — tick and clear on gators + wildlife
+  if (events.eclipse && events.eclipse.wildlifePaused) {
+    for (const [, tr, gator] of world.query('transform', 'gator')) {
+      if (gator._eclipseFrozen) {
+        gator._eclipseFreezeTimer = (gator._eclipseFreezeTimer || 0) - dt;
+        if (gator._eclipseFreezeTimer <= 0) {
+          gator._eclipseFrozen = false;
+        } else {
+          tr.vx = 0;
+          tr.vy = 0;
+        }
+      }
+    }
+    for (const w of wildlifeState.wildlife) {
+      if (w._eclipseFrozen) {
+        w._eclipseFreezeTimer = (w._eclipseFreezeTimer || 0) - dt;
+        if (w._eclipseFreezeTimer <= 0) {
+          w._eclipseFrozen = false;
+        } else {
+          w.vx = 0;
+          w.vy = 0;
+        }
+      }
+    }
+  }
+
   // Systems
   preySystem(world, dt, simTime, rng);
   aiSystem(world, dt, rng, waterY);
@@ -2474,8 +2803,8 @@ function gameLoop(timestamp) {
   updateAmbientParticles(particles, dt, simTime, rng, env, waterY);
   updateGatorRipples(particles, world, dt, rng, waterY);
   const currentEraId = (gameMode === MODE_DYNASTY && dynasty) ? (dynasty.era || 1) : 1;
-  updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat, obituaryState }, currentEraId);
-  updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState);
+  updateWildlife(wildlifeState, dt, simTime, rng, world, waterY, { spawnDeathParticles, spawnPrey, particles, playZap, playEat, obituaryState }, currentEraId, env);
+  updateEvents(events, world, dt, rng, waterY, simTime, env, obituaryState, currentEraId);
   updateFires(fireState, dt, rng, wildlifeState.wildlife, world, env, waterY);
 
   // Update flying tree debris
@@ -2544,12 +2873,15 @@ function gameLoop(timestamp) {
         playGoalComplete();
       },
       onAwardLP(amount) {
-        lineagePoints += amount;
+        // legacy_renown: double LP for the first goal completed this dynasty run
+        const mult = getLegacyRenownMultiplier(goalState.completed.length);
+        const adjusted = Math.round(amount * mult);
+        lineagePoints += adjusted;
         saveLineagePoints(lineagePoints);
         // "+N lp" floating amber text at center screen
-        if (amount > 0) {
+        if (adjusted > 0) {
           addMoment(obituaryState, {
-            text: `+${amount} lp`,
+            text: mult > 1 ? `+${adjusted} lp (renown)` : `+${adjusted} lp`,
             x: null,
             y: null,
             color: '#ddaa30',
@@ -2561,6 +2893,90 @@ function gameLoop(timestamp) {
       },
     };
     updateGoals(goalState, dt, goalCtx, goalCallbacks);
+  }
+
+  // --- Achievement tracking + check ---
+  if (achievementState) {
+    // Kill tracking: diff mealCount per gator each frame
+    let _newKills = 0;
+    for (const [id, , g] of world.query('transform', 'gator')) {
+      const prev = _prevMealCounts.get(id) || 0;
+      const cur  = g.mealCount || 0;
+      if (cur > prev) _newKills += (cur - prev);
+      _prevMealCounts.set(id, cur);
+    }
+    for (const id of _prevMealCounts.keys()) {
+      if (!world.get(id, 'gator')) _prevMealCounts.delete(id);
+    }
+    for (let i = 0; i < _newKills; i++) recordKill(achievementState);
+
+    // UFO survival: player alive during active UFO
+    if (events.ufo && dynasty?.playerGatorId) {
+      const pg = world.get(dynasty.playerGatorId, 'gator');
+      if (pg) achievementState.stats.sawUFOThisSession = true;
+    }
+    // Tornado survival: player alive after tornado clears
+    if (!events.tornado && achievementState.stats._tornadoWasActive && dynasty?.playerGatorId) {
+      const pg = world.get(dynasty.playerGatorId, 'gator');
+      if (pg) achievementState.stats.sawTornadoThisSession = true;
+    }
+    achievementState.stats._tornadoWasActive = !!(events.tornado);
+
+    // Cryptid sighting in dynasty mode
+    let _seenCryptid = false;
+    if (gameMode === MODE_DYNASTY && dynasty) {
+      for (const w of (wildlifeState?.wildlife || [])) {
+        if (w.type === 'chupacabra' || w.type === 'sasquatch') { _seenCryptid = true; break; }
+      }
+    }
+
+    // Mate died while player still lives
+    let _mateJustDied = false;
+    if (dynasty?.mateGatorId && !isUnlocked(achievementState, 'mate-died-survived')) {
+      const mateAlive = !!(world.get(dynasty.mateGatorId, 'gator'));
+      const playerAlive = dynasty.playerGatorId ? !!(world.get(dynasty.playerGatorId, 'gator')) : false;
+      if (!mateAlive && playerAlive) _mateJustDied = true;
+    }
+
+    const _achCallbacks = {
+      onUnlock(ach) {
+        addMoment(obituaryState, {
+          text: `achievement: ${ach.title.toLowerCase()}`,
+          x: null, y: null, color: '#ddaa30',
+        });
+        if (dynasty) {
+          dynasty._newAchievementsThisRun = dynasty._newAchievementsThisRun || [];
+          dynasty._newAchievementsThisRun.push(ach.id);
+        }
+      },
+      onAwardLP(amount) {
+        lineagePoints += amount;
+        saveLineagePoints(lineagePoints);
+        recordLP(achievementState, amount);
+        if (amount > 0) {
+          addMoment(obituaryState, {
+            text: `+${amount} lp`,
+            x: null, y: null, color: '#ddaa30',
+          });
+        }
+      },
+      addMoment(_t) {},
+    };
+
+    checkAchievements(achievementState, {
+      dynasty,
+      world,
+      simTime,
+      maxGeneration,
+      obituary: obituaryState?.entries || [],
+      seenCryptid: _seenCryptid,
+      fightWinThisFrame: false,
+      dynastyJustEnded: false,
+      mateJustDied: _mateJustDied,
+      events,
+    }, _achCallbacks);
+
+    if (_newKills > 0) saveAchievementState(achievementState);
   }
 
   // Player HUD + hover tooltip (HTML overlays)

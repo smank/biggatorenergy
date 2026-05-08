@@ -47,6 +47,16 @@ export const WILDLIFE_VALID_ERAS = {
   beaver:         [1, 2],
   jeep:           [2],      // industrial only — vehicles don't exist in primordial
   airboat:        [2],      // industrial only
+  // New species batch 2
+  dragonfly:      [1, 2],
+  otter:          [1, 2],
+  bullfrog:       [1, 2],
+  snapping_turtle:[1, 2],
+  bass:           [1, 2],
+  gar:            [1, 2],
+  invasive_python:[2],      // industrial only — introduced species
+  oil_slick_fish: [2],      // industrial only — pollution indicator
+  distant_cattle: [2],      // industrial only — background presence
 };
 
 // Generation milestones that grant a bonus era advance (each fires only once)

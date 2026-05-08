@@ -12,16 +12,19 @@ export const WILDLIFE_TYPES = [
   'armadillo', 'rabbit', 'deer',
   'water_moccasin', 'pelican', 'osprey', 'wild_boar', 'panther',
   'coyote', 'beaver', 'jeep', 'airboat',
+  // New species batch 2
+  'dragonfly', 'otter', 'bullfrog', 'snapping_turtle', 'bass', 'gar',
+  'invasive_python', 'oil_slick_fish', 'distant_cattle',
 ];
 
 export const CRYPTID_TYPES = ['sasquatch', 'chupacabra', 'mothman'];
 const CRYPTID_SET = new Set(CRYPTID_TYPES);
 
 // Pre-built Sets for hot-path type checks (avoid per-frame .includes() O(n) scans)
-const GRAVITY_TYPES = new Set(['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien', 'wild_boar', 'panther', 'coyote', 'jeep']);
+const GRAVITY_TYPES = new Set(['deer', 'rabbit', 'raccoon', 'opossum', 'armadillo', 'sasquatch', 'chupacabra', 'hunter_foot', 'alien', 'wild_boar', 'panther', 'coyote', 'jeep', 'bullfrog', 'distant_cattle']);
 const HUNTER_TYPES = new Set(['hunter_foot', 'hunter_boat', 'jeep', 'airboat']);
-const NON_EDIBLE_WILDLIFE = new Set(['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey']);
-const TOUGH_PREY = new Set(['deer', 'raccoon', 'nutria']);
+const NON_EDIBLE_WILDLIFE = new Set(['bird', 'egret', 'butterfly', 'mosquito_swarm', 'mothman', 'hunter_foot', 'hunter_boat', 'jeep', 'airboat', 'panther', 'pelican', 'osprey', 'dragonfly', 'distant_cattle', 'oil_slick_fish']);
+const TOUGH_PREY = new Set(['deer', 'raccoon', 'nutria', 'invasive_python', 'snapping_turtle']);
 
 export const FOOD_CHAIN = {
   snake:       { prey: ['crawfish', 'rabbit', 'mosquito_swarm'], fears: ['heron_bg', 'egret', 'bird', 'sasquatch', 'hunter_foot', 'hunter_boat'], speed: 8 },
@@ -53,6 +56,16 @@ export const FOOD_CHAIN = {
   jeep: { prey: [], fears: [], speed: 12 },
   airboat: { prey: [], fears: [], speed: 15 },
   alien: { prey: [], fears: [], speed: 5 }, // fights are handled specially
+  // New species batch 2
+  dragonfly:       { prey: ['mosquito_swarm'], fears: ['bird', 'frog', 'bullfrog'], speed: 12 },
+  otter:           { prey: ['crawfish', 'bass'], fears: ['chupacabra', 'panther'], speed: 7 },
+  bullfrog:        { prey: ['mosquito_swarm', 'dragonfly', 'crawfish'], fears: ['snake', 'water_moccasin', 'heron_bg', 'egret', 'raccoon'], speed: 4 },
+  snapping_turtle: { prey: ['crawfish', 'frog', 'bullfrog', 'turtle', 'bass'], fears: [], speed: 2 },
+  bass:            { prey: ['crawfish', 'mosquito_swarm'], fears: ['heron_bg', 'egret', 'gar', 'osprey', 'snapping_turtle'], speed: 9 },
+  gar:             { prey: ['crawfish', 'bass', 'water_moccasin', 'turtle', 'snapping_turtle'], fears: [], speed: 4 },
+  invasive_python: { prey: ['rabbit', 'raccoon', 'opossum', 'nutria', 'armadillo', 'bird', 'deer'], fears: ['hunter_foot', 'chupacabra'], speed: 5 },
+  oil_slick_fish:  { prey: [], fears: [], speed: 1 },
+  distant_cattle:  { prey: [], fears: [], speed: 2 },
 };
 
 export function createWildlifeState() {
@@ -197,6 +210,64 @@ export function spawnWildlife(rng, type, simTime, waterY) {
       base.life = rng.float(15, 30);
       base.huntTimer = rng.float(2, 5);
       break;
+    // New species batch 2
+    case 'dragonfly':
+      base.y = waterY - rng.float(10, 30);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(8, 14);
+      base.life = rng.float(10, 25);
+      base.loopTimer = 0;
+      base.loopPhase = rng.float(0, Math.PI * 2);
+      break;
+    case 'otter':
+      base.y = waterY - rng.float(0, 2);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(2, 5);
+      base.hp = 2;
+      base.flipTimer = rng.float(3, 8);
+      base.flipping = false;
+      break;
+    case 'bullfrog':
+      base.y = waterY - rng.float(0, 3);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(1, 3);
+      base.hp = 2;
+      base.life = rng.float(20, 45);
+      base.jumpTimer = rng.float(2, 6);
+      break;
+    case 'snapping_turtle':
+      base.y = waterY - rng.float(0, 2);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(0.5, 2);
+      base.hp = 5;
+      base.life = rng.float(30, 60);
+      break;
+    case 'bass':
+      base.y = waterY + rng.float(3, 10);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(4, 8);
+      base.hp = 2;
+      break;
+    case 'gar':
+      base.y = waterY + rng.float(5, 14);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(2, 4);
+      base.hp = 6;
+      base.life = rng.float(30, 60);
+      break;
+    case 'invasive_python':
+      base.y = waterY - rng.float(1, 4);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(1, 3);
+      base.hp = 8;
+      base.life = rng.float(40, 80);
+      base.huntTimer = rng.float(1, 4);
+      break;
+    case 'oil_slick_fish':
+      base.y = waterY + rng.float(1, 4);
+      base.vx = (fromLeft ? 1 : -1) * rng.float(0.3, 1);
+      base.life = rng.float(15, 35);
+      base.floatTimer = rng.float(5, 15);
+      base.floating = false;
+      break;
+    case 'distant_cattle':
+      base.y = waterY - rng.float(12, 22); // far back / elevated
+      base.vx = (fromLeft ? 1 : -1) * rng.float(1, 2);
+      base.life = rng.float(20, 50);
+      break;
     // Hunters
     case 'hunter_foot':
       base.y = waterY - rng.float(4, 10);
@@ -219,6 +290,232 @@ export function spawnWildlife(rng, type, simTime, waterY) {
   return base;
 }
 
+// ─── Behavior helpers ─────────────────────────────────────────────────────────
+
+// Approximate tree-zone bands (cx ± hw px). Trees spawn 8..CANVAS_W-8 from
+// a seeded RNG; we can't know exact positions so use 7 evenly-spaced bands
+// that statistically cover wherever trees land.
+const TREE_BANDS = [30, 65, 100, 128, 158, 193, 225].map(cx => ({ cx, hw: 14 }));
+
+// Types that can breed (mammals + reptiles, birds handled via nesting)
+const BREEDABLE_TYPES = new Set([
+  'deer', 'raccoon', 'opossum', 'rabbit', 'nutria', 'armadillo',
+  'wild_boar', 'coyote', 'beaver',
+  'snake', 'water_moccasin', 'turtle',
+  // future parallel-agent species — gated by type check, harmless if absent
+  'otter', 'snapping_turtle',
+]);
+
+// Predators that stay active at night
+const NIGHT_ACTIVE = new Set(['heron_bg', 'panther', 'chupacabra', 'osprey']);
+
+// Bird types eligible for nesting
+const BIRD_NEST_TYPES = new Set(['bird', 'egret', 'heron_bg']);
+
+/** Returns true if x falls within one of the approximate tree canopy bands. */
+function nearTree(x) {
+  for (const { cx, hw } of TREE_BANDS) {
+    if (Math.abs(x - cx) <= hw) return true;
+  }
+  return false;
+}
+
+// ─── Behavior 1: Bird nesting ─────────────────────────────────────────────────
+function _updateBirdNesting(wildlife, w, dt, rng, waterY) {
+  if (!BIRD_NEST_TYPES.has(w.type)) return;
+  if (w.nesting) {
+    // Snap to perch
+    w.x += (w.nestX - w.x) * Math.min(1, 5 * dt);
+    w.y += (w.nestY - w.y) * Math.min(1, 5 * dt);
+    w.vx = 0;
+    w.vy = 0;
+
+    // Count down nest sit timer, then lay eggs once
+    if (!w.eggs) {
+      w.nestTimer -= dt;
+      if (w.nestTimer <= 0) {
+        const count = rng.range(1, 3);
+        w.eggs = [];
+        for (let e = 0; e < count; e++) {
+          w.eggs.push({
+            x: w.nestX + rng.float(-3, 3),
+            y: w.nestY + 1,
+            hatchTimer: rng.float(8, 12),
+            hatched: false,
+            parentType: w.type,
+          });
+        }
+      }
+    }
+
+    // Hatch eggs
+    if (w.eggs) {
+      for (const egg of w.eggs) {
+        if (egg.hatched) continue;
+        egg.hatchTimer -= dt;
+        if (egg.hatchTimer <= 0) {
+          egg.hatched = true;
+          wildlife.push({
+            type: egg.parentType,
+            x: egg.x,
+            y: egg.y,
+            vx: rng.float(-3, 3),
+            vy: -rng.float(2, 5),
+            animTimer: 0,
+            life: rng.float(15, 30),
+            alive: true,
+            hp: 1,
+            scale: 0.6,
+            isFledgling: true,
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  // Start nesting when life is low and near a tree
+  if (!w.nesting && w.life < 15 && nearTree(w.x) && !w.isFledgling) {
+    w.nesting = true;
+    w.nestTimer = rng.float(5, 10);
+    w.nestX = w.x;
+    // Approximate canopy top — trunks are 30–55 px tall
+    w.nestY = waterY - rng.float(50, 75);
+  }
+}
+
+// ─── Behavior 2: Deer herding ─────────────────────────────────────────────────
+function _updateDeerHerd(wildlife, w) {
+  if (w.type !== 'deer') return;
+  let nearCount = 0;
+  let avgVx = 0;
+  let cascadeFlee = false;
+  for (const other of wildlife) {
+    if (other === w || !other.alive || other.type !== 'deer') continue;
+    if (Math.abs(other.x - w.x) < 40 && Math.abs(other.y - w.y) < 10) {
+      avgVx += other.vx;
+      nearCount++;
+      if (other.herdFleeing) cascadeFlee = true;
+      if (nearCount >= 6) break;
+    }
+  }
+  if (nearCount > 0) {
+    const blend = nearCount >= 3 ? 0.3 : 0.15;
+    w.vx += (avgVx / nearCount - w.vx) * blend;
+    if (cascadeFlee) {
+      w.herdFleeing = true;
+      w.vx = Math.sign(w.vx || 1) * 16;
+    }
+  }
+  // Decay herd flee state
+  if (w.herdFleeing) {
+    w.herdFleeTimer = (w.herdFleeTimer || 2) - 0; // keep positive, will expire via life
+    // After a moment, stop cascading
+    if (!cascadeFlee && nearCount === 0) w.herdFleeing = false;
+  }
+}
+
+// ─── Behavior 3: Fish / bass schooling ───────────────────────────────────────
+// Only applies to wildlife whose type string contains 'fish' or 'bass'
+function _updateFishSchooling(wildlife, w, dt, world) {
+  const isFish = w.type.includes('fish') || w.type.includes('bass');
+  if (!isFish) return;
+
+  // Cohesion — drift toward nearby same-type
+  let nearCount = 0;
+  let cx = 0;
+  let cy = 0;
+  for (const other of wildlife) {
+    if (other === w || !other.alive || other.type !== w.type) continue;
+    const dx = other.x - w.x;
+    const dy = other.y - w.y;
+    if (Math.abs(dx) < 15 && Math.abs(dy) < 8) {
+      cx += dx;
+      cy += dy;
+      nearCount++;
+    }
+  }
+  if (nearCount > 0) {
+    w.vx += (cx / nearCount) * 0.04;
+    w.vy += (cy / nearCount) * 0.04;
+  }
+
+  // Scatter from aerial predators
+  const FISH_PREDATORS = ['heron_bg', 'egret', 'bird', 'osprey', 'pelican'];
+  for (const other of wildlife) {
+    if (!other.alive || !FISH_PREDATORS.includes(other.type)) continue;
+    const dx = w.x - other.x;
+    const dy = w.y - other.y;
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 < 400) { // 20px
+      const dist = Math.sqrt(dist2) + 0.01;
+      w.vx += (dx / dist) * 12;
+      w.vy += (dy / dist) * 8;
+      break;
+    }
+  }
+  // Scatter from gators
+  for (const [, gtr, gator] of world.query('transform', 'gator')) {
+    if (gator.stage === 'egg') continue;
+    const dx = w.x - gtr.x;
+    const dy = w.y - gtr.y;
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 < 225) { // 15px
+      const dist = Math.sqrt(dist2) + 0.01;
+      w.vx += (dx / dist) * 14;
+      w.vy += (dy / dist) * 10;
+      break;
+    }
+  }
+  // Speed cap
+  const spd = Math.sqrt(w.vx * w.vx + w.vy * w.vy);
+  if (spd > 10) { w.vx = (w.vx / spd) * 10; w.vy = (w.vy / spd) * 10; }
+}
+
+// ─── Behavior 4: Wildlife mating ──────────────────────────────────────────────
+function _updateMating(wildlife, w, dt, rng) {
+  if (!BREEDABLE_TYPES.has(w.type)) return;
+  if (w.hp <= 1) return;
+  if ((w.mateCooldown || 0) > 0) { w.mateCooldown -= dt; return; }
+
+  for (const other of wildlife) {
+    if (other === w || !other.alive || other.type !== w.type) continue;
+    if (other.hp <= 1 || (other.mateCooldown || 0) > 0) continue;
+    const dx = other.x - w.x;
+    const dy = other.y - w.y;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 6) {
+      if (rng.chance(0.001)) {
+        w.mateCooldown = 30;
+        other.mateCooldown = 30;
+        wildlife.push({
+          type: w.type,
+          x: (w.x + other.x) / 2,
+          y: (w.y + other.y) / 2,
+          vx: rng.float(-2, 2),
+          vy: rng.float(-3, -1),
+          animTimer: 0,
+          life: rng.float(20, 40),
+          alive: true,
+          hp: 1,
+          scale: 0.6,
+          isBaby: true,
+        });
+      }
+      break; // only check first candidate per tick
+    }
+  }
+}
+
+// ─── Behavior 5: Roosting at night — applied per-creature ────────────────────
+function _applyRoosting(w, timeOfDay) {
+  if (NIGHT_ACTIVE.has(w.type)) return;
+  const isNight = timeOfDay > 0.85 || timeOfDay < 0.15;
+  if (isNight) {
+    w.vx *= 0.2;
+    if (w.vy) w.vy *= 0.5;
+  }
+}
+
 /**
  * Update all wildlife creatures.
  * @param {object} state - Wildlife state from createWildlifeState()
@@ -229,8 +526,9 @@ export function spawnWildlife(rng, type, simTime, waterY) {
  * @param {number} waterY - Water line Y position
  * @param {object} callbacks - { spawnDeathParticles(particles, x, y, color), spawnPrey, particles, playZap, playEat, obituaryState? }
  * @param {number} [currentEraId=1] - Current era id for era-gated spawn filtering
+ * @param {object} [env={}] - Environment state ({ timeOfDay, ... })
  */
-export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks, currentEraId = 1) {
+export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks, currentEraId = 1, env = {}) {
   const { spawnDeathParticles, spawnPrey, particles, playZap, playEat, obituaryState } = callbacks;
   const wildlife = state.wildlife;
 
@@ -300,18 +598,24 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
     const fleeRange = 30;
 
     // --- FLEE from predators ---
+    // Behavior 6: Wildlife memory — recent danger boosts flee speed/range
+    const recentlyDangered = w.lastDanger && (simTime - w.lastDanger) < 8;
+    const memoryMult = recentlyDangered ? 1.5 : 1.0;
+    const activeFleeRange = fleeRange * memoryMult;
+
     if (chain && chain.fears.length > 0) {
       for (const other of wildlife) {
         if (other === w || !other.alive) continue;
         if (!chain.fears.includes(other.type)) continue;
         const dist = distance(w.x, w.y, other.x, other.y);
-        if (dist < fleeRange) {
-          // Run away!
-          const fleeSpeed = (chain.speed || 6) * 1.3;
+        if (dist < activeFleeRange) {
+          // Run away! — memory boosts speed
+          const fleeSpeed = (chain.speed || 6) * 1.3 * memoryMult;
           w.vx = Math.sign(w.x - other.x) * fleeSpeed;
           if (w.type === 'deer' || w.type === 'rabbit') {
             w.vy = -rng.float(3, 8); // jump while fleeing
           }
+          w.lastDanger = simTime; // refresh memory
           break;
         }
       }
@@ -319,8 +623,9 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
       for (const [gid, gtr, gator] of world.query('transform', 'gator')) {
         if (gator.stage === 'egg') continue;
         const dist = distance(w.x, w.y, gtr.x, gtr.y);
-        if (dist < fleeRange * 0.7) {
-          w.vx = Math.sign(w.x - gtr.x) * (chain.speed || 6) * 1.2;
+        if (dist < activeFleeRange * 0.7) {
+          w.vx = Math.sign(w.x - gtr.x) * (chain.speed || 6) * 1.2 * memoryMult;
+          w.lastDanger = simTime; // remember gator threat
           break;
         }
       }
@@ -377,8 +682,9 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
               closest.alive = false;
               spawnDeathParticles(particles, closest.x, closest.y);
             } else {
-              // Failed hunt, take damage
+              // Failed hunt, take damage — stamp threat memory
               w.hp -= 1;
+              w.lastDanger = simTime;
               spawnDeathParticles(particles, w.x, w.y);
               if (w.hp <= 0) w.alive = false;
             }
@@ -474,6 +780,96 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
       case 'beaver':
         if (w.y < waterY - 2) w.y = waterY - 1;
         w.y += Math.sin(simTime * 2 + i) * 0.3 * dt; // bob
+        break;
+      // New species batch 2
+      case 'dragonfly': {
+        // Fast erratic loops around a center point — tight figure-8 flight
+        w.loopTimer = (w.loopTimer || 0) + dt * 4;
+        const loopPhase = (w.loopPhase || 0);
+        w.x += Math.cos(w.loopTimer + loopPhase) * 6 * dt;
+        w.y += Math.sin(w.loopTimer * 2 + loopPhase) * 5 * dt;
+        // Clamp altitude — stays above waterline
+        if (w.y > waterY - 5) w.y = waterY - 5;
+        if (w.y < 2) w.y = 2;
+        break;
+      }
+      case 'otter': {
+        // Playful — bob in water, occasionally flip
+        w.flipTimer = (w.flipTimer || 0) - dt;
+        if (w.flipTimer <= 0 && !w.flipping) {
+          w.flipping = true;
+          w.flipAnim = 0;
+          w.flipTimer = rng.float(4, 10);
+        }
+        if (w.flipping) {
+          w.flipAnim = (w.flipAnim || 0) + dt * 4;
+          w.vy = -Math.sin(w.flipAnim) * 6;
+          if (w.flipAnim >= Math.PI) { w.flipping = false; w.vy = 0; }
+        }
+        if (w.y < waterY - 3) w.vy += 8 * dt;
+        if (w.y > waterY + 1) { w.y = waterY + 1; w.vy = 0; }
+        break;
+      }
+      case 'bullfrog': {
+        // Sits still mostly, occasional hop
+        w.jumpTimer = (w.jumpTimer || 0) - dt;
+        if (w.jumpTimer <= 0) {
+          w.vy = -rng.float(4, 8);
+          w.vx = Math.sign(w.vx || 1) * rng.float(1, 4);
+          w.jumpTimer = rng.float(3, 8);
+        }
+        w.vy += 18 * dt;
+        if (w.y > waterY - 1) { w.y = waterY - 1; w.vy = Math.min(0, w.vy); }
+        break;
+      }
+      case 'snapping_turtle':
+        // Slow, deliberate — vx decays slowly
+        w.vx *= 0.995;
+        if (w.y < waterY - 1) w.y = waterY - 1;
+        break;
+      case 'bass':
+        // Faster fish, stays underwater, slight bob
+        w.y += Math.sin(simTime * 3.5 + i * 1.4) * 1.5 * dt;
+        if (w.y < waterY + 1) w.y = waterY + 1;
+        break;
+      case 'gar':
+        // Slow apex predator, glides underwater
+        w.y += Math.sin(simTime * 1.5 + i) * 1 * dt;
+        w.vx *= 0.998;
+        if (w.y < waterY + 3) w.y = waterY + 3;
+        break;
+      case 'invasive_python': {
+        // Slow slithering on land — sinuous wave like a big snake
+        w.y += Math.sin(simTime * 2.5 + i * 0.9) * 1.5 * dt;
+        if (w.y < waterY - 2) w.vy += 5 * dt; // gravitates toward water's edge
+        if (w.y > waterY) { w.y = waterY; w.vy = 0; }
+        w.vx *= 0.99;
+        break;
+      }
+      case 'oil_slick_fish': {
+        // Sluggish, occasionally goes belly-up (float)
+        w.floatTimer = (w.floatTimer || 0) - dt;
+        if (w.floatTimer <= 0) {
+          w.floating = !w.floating;
+          w.floatTimer = w.floating ? rng.float(3, 8) : rng.float(5, 15);
+        }
+        if (w.floating) {
+          // Float at surface — drift upward slowly
+          w.vy = -1;
+          if (w.y < waterY) w.y = waterY;
+          w.vx *= 0.98;
+        } else {
+          w.y += Math.sin(simTime * 2 + i) * 0.8 * dt;
+          if (w.y < waterY + 1) w.y = waterY + 1;
+          w.vx *= 0.99;
+        }
+        break;
+      }
+      case 'distant_cattle':
+        // Background silhouette — slow plod, minimal movement
+        w.vx *= 0.998;
+        // Very slight head-bob
+        w.y += Math.sin(simTime * 1.2 + i) * 0.15 * dt;
         break;
       case 'jeep':
         w.y += Math.sin(simTime * 15 + i) * 0.2 * dt; // engine rumble
@@ -658,8 +1054,10 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
                 target.alive = false;
                 spawnDeathParticles(particles, target.x, target.y);
               } else {
-                // Target fights back — hunter takes damage
+                // Target fights back — hunter takes damage; stamp threat memory on target
+                if (target && target.lastDanger !== undefined || target) target.lastDanger = simTime;
                 w.hp -= 1;
+                w.lastDanger = simTime;
                 spawnDeathParticles(particles, w.x, w.y);
                 if (w.hp <= 0) {
                   w.alive = false;
@@ -769,6 +1167,23 @@ export function updateWildlife(state, dt, simTime, rng, world, waterY, callbacks
         break;
       }
     }
+
+    // ─── Behavior layers ─────────────────────────────────────────────────────
+
+    // 1. Bird nesting
+    _updateBirdNesting(wildlife, w, dt, rng, waterY);
+
+    // 2. Deer herding
+    _updateDeerHerd(wildlife, w);
+
+    // 3. Fish / bass schooling (wildlife types with 'fish'/'bass' in name)
+    _updateFishSchooling(wildlife, w, dt, world);
+
+    // 4. Mating (mammals + reptiles)
+    _updateMating(wildlife, w, dt, rng);
+
+    // 5. Night roosting — dampen movement after all other forces
+    _applyRoosting(w, env.timeOfDay || 0);
 
     // Kill off-screen entities quickly — tighter bounds
     if (w.life <= 0 || w.x < -12 || w.x > CANVAS_W + 12 || w.y < -15 || w.y > CANVAS_H + 5) {
@@ -1073,6 +1488,200 @@ export function renderWildlife(ctx, state, simTime) {
         ctx.fillStyle = '#ff8844';
         ctx.fillRect(px + (flipX ? -2 : 5), py + 1, 1, 1);
         break;
+
+      // --- NEW SPECIES BATCH 2 ---
+      case 'dragonfly': {
+        // 3x3 — iridescent purple/blue/green wings, tiny dark body
+        const dfwing = Math.sin(simTime * 18 + w.x) > 0;
+        // Top wings (purple-blue iridescent)
+        ctx.fillStyle = dfwing ? '#8855cc' : '#6644aa';
+        ctx.fillRect(px - 1, py - 1, 1, 1);
+        ctx.fillRect(px + 1, py - 1, 1, 1);
+        // Bottom wings (blue-green iridescent)
+        ctx.fillStyle = dfwing ? '#44aacc' : '#3399aa';
+        ctx.fillRect(px - 1, py + 1, 1, 1);
+        ctx.fillRect(px + 1, py + 1, 1, 1);
+        // Body (dark with green tint)
+        ctx.fillStyle = '#2a2a1a';
+        ctx.fillRect(px, py - 1, 1, 3);
+        // Eyes (tiny bright)
+        ctx.fillStyle = '#55ff55';
+        ctx.fillRect(px, py - 1, 1, 1);
+        break;
+      }
+      case 'otter': {
+        // 5x3 — brown with cream belly, rounded snout
+        const otFlip = w.flipping;
+        // Body
+        ctx.fillStyle = '#6a4020';
+        ctx.fillRect(px, py, 5, otFlip ? 2 : 3);
+        // Cream belly
+        ctx.fillStyle = '#c8a878';
+        ctx.fillRect(px + 1, py + (otFlip ? 0 : 1), 3, otFlip ? 2 : 1);
+        // Head
+        ctx.fillStyle = '#7a5030';
+        ctx.fillRect(px + (flipX ? -1 : 5), py, 1, 2);
+        // Nose
+        ctx.fillStyle = '#2a1008';
+        ctx.fillRect(px + (flipX ? -1 : 5), py, 1, 1);
+        // Flat tail
+        ctx.fillStyle = '#5a3010';
+        ctx.fillRect(px + (flipX ? 5 : -1), py + 1, 1, 1);
+        // Flipping flash — splash of white
+        if (otFlip) {
+          ctx.fillStyle = 'rgba(200,230,255,0.5)';
+          ctx.fillRect(px - 1, py + 2, 7, 1);
+        }
+        break;
+      }
+      case 'bullfrog': {
+        // 4x3 — dark green, big eyes on top
+        ctx.fillStyle = '#1a5a1a';
+        ctx.fillRect(px, py, 4, 3);
+        ctx.fillStyle = '#2a7a2a';
+        ctx.fillRect(px + 1, py, 2, 2);
+        // Eyes (bulging, gold)
+        ctx.fillStyle = '#ccaa00';
+        ctx.fillRect(px, py - 1, 1, 1);
+        ctx.fillRect(px + 3, py - 1, 1, 1);
+        // Legs when on ground
+        ctx.fillStyle = '#1a4a1a';
+        ctx.fillRect(px, py + 3, 2, 1);
+        ctx.fillRect(px + 2, py + 3, 2, 1);
+        // Throat sac — light green when calling
+        if (Math.sin(simTime * 2 + w.x) > 0.6) {
+          ctx.fillStyle = '#5aaa5a';
+          ctx.fillRect(px + 1, py + 2, 2, 1);
+        }
+        break;
+      }
+      case 'snapping_turtle': {
+        // 5x3 — very dark spiked shell, aggressive head extension
+        ctx.fillStyle = '#2a2a0a';
+        ctx.fillRect(px, py, 5, 3);
+        ctx.fillStyle = '#3a3a1a';
+        ctx.fillRect(px + 1, py, 3, 2);
+        // Shell ridge/spikes
+        ctx.fillStyle = '#1a1a08';
+        ctx.fillRect(px + 1, py - 1, 1, 1);
+        ctx.fillRect(px + 3, py - 1, 1, 1);
+        // Head — extends forward
+        ctx.fillStyle = '#4a4a2a';
+        ctx.fillRect(px + (flipX ? -2 : 5), py, 2, 2);
+        // Eye
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillRect(px + (flipX ? -2 : 6), py, 1, 1);
+        // Feet
+        ctx.fillStyle = '#2a2a0a';
+        ctx.fillRect(px, py + 3, 1, 1);
+        ctx.fillRect(px + 4, py + 3, 1, 1);
+        break;
+      }
+      case 'bass': {
+        // 5x3 — green-gray, stripes
+        const bassFrame = Math.sin(simTime * 5 + w.x * 0.1) > 0;
+        ctx.fillStyle = '#5a7a4a';
+        ctx.fillRect(px, py, 5, 3);
+        ctx.fillStyle = '#7a9a6a';
+        ctx.fillRect(px + 1, py + 1, 3, 1);
+        // Darker stripes
+        ctx.fillStyle = '#3a5a2a';
+        ctx.fillRect(px + 1, py, 1, 2);
+        ctx.fillRect(px + 3, py, 1, 2);
+        // Eye
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(px + (flipX ? 3 : 1), py + 1, 1, 1);
+        // Tail
+        ctx.fillStyle = '#4a6a3a';
+        ctx.fillRect(px + (flipX ? 5 : -1), py + (bassFrame ? 0 : 1), 1, bassFrame ? 3 : 2);
+        break;
+      }
+      case 'gar': {
+        // 8x2 — long dark primitive fish, lighter belly, needle snout
+        ctx.fillStyle = '#3a3a3a';
+        ctx.fillRect(px, py, 8, 2);
+        // Lighter belly stripe
+        ctx.fillStyle = '#6a6a5a';
+        ctx.fillRect(px + 1, py + 1, 6, 1);
+        // Armored scales pattern
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(px + 2, py, 1, 1);
+        ctx.fillRect(px + 4, py, 1, 1);
+        ctx.fillRect(px + 6, py, 1, 1);
+        // Long needle snout
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(px + (flipX ? 8 : -2), py, 2, 1);
+        // Eye (small, predatory)
+        ctx.fillStyle = '#aaaa00';
+        ctx.fillRect(px + (flipX ? 6 : 1), py, 1, 1);
+        break;
+      }
+      case 'invasive_python': {
+        // 10x2 — dark green/black patterned, thick body, blunt head
+        const pOffset = (w.x * 0.13) % (Math.PI * 2); // unique offset per instance based on position
+        for (let s = 0; s < 9; s++) {
+          const sy = Math.round(Math.sin(simTime * 2 + s * 0.7 + pOffset) * 2);
+          const dark = (s % 3 === 0);
+          ctx.fillStyle = dark ? '#1a2a0a' : '#2a3a0a';
+          ctx.fillRect(px + (flipX ? -s : s), py + sy, 1, 2);
+        }
+        // Blunt head
+        ctx.fillStyle = '#1a1a0a';
+        ctx.fillRect(px + (flipX ? -9 : 9), py, 2, 2);
+        // Heat-pit eyes (tiny)
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillRect(px + (flipX ? -9 : 9), py, 1, 1);
+        // Tongue flick
+        if (Math.sin(simTime * 6 + w.x) > 0.5) {
+          ctx.fillStyle = '#cc2222';
+          ctx.fillRect(px + (flipX ? -11 : 11), py, 2, 1);
+        }
+        break;
+      }
+      case 'oil_slick_fish': {
+        // 5x3 — sickly greenish-yellow, sometimes belly-up
+        if (w.floating) {
+          // Belly-up — upside down silhouette
+          ctx.fillStyle = '#9a9a2a';
+          ctx.fillRect(px, py, 5, 2);
+          ctx.fillStyle = '#aaaa3a';
+          ctx.fillRect(px + 1, py, 3, 1);
+          // Dead eye
+          ctx.fillStyle = '#888800';
+          ctx.fillRect(px + (flipX ? 3 : 1), py, 1, 1);
+          // Oil sheen on surface
+          ctx.fillStyle = 'rgba(180,160,0,0.25)';
+          ctx.fillRect(px - 2, py - 1, 9, 1);
+        } else {
+          ctx.fillStyle = '#7a8a2a';
+          ctx.fillRect(px, py, 5, 3);
+          ctx.fillStyle = '#aaaa3a';
+          ctx.fillRect(px + 1, py + 1, 3, 1);
+          // Sickly eye
+          ctx.fillStyle = '#555500';
+          ctx.fillRect(px + (flipX ? 3 : 1), py + 1, 1, 1);
+          // Yellow tinge tail
+          ctx.fillStyle = '#8a8a1a';
+          ctx.fillRect(px + (flipX ? 5 : -1), py + 1, 1, 2);
+        }
+        break;
+      }
+      case 'distant_cattle': {
+        // 4x3 — brown/black silhouette, far background presence
+        // Draw slightly smaller/darker to imply distance
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillRect(px, py, 4, 2);
+        // Hump (zebu-ish, swamp cattle)
+        ctx.fillStyle = '#2a1a0a';
+        ctx.fillRect(px + 1, py - 1, 2, 1);
+        // Head
+        ctx.fillRect(px + (flipX ? -1 : 4), py, 1, 2);
+        // Legs
+        ctx.fillStyle = '#2a1a0a';
+        ctx.fillRect(px, py + 2, 1, 2);
+        ctx.fillRect(px + 3, py + 2, 1, 2);
+        break;
+      }
 
       // --- VEHICLES ---
       case 'jeep': {

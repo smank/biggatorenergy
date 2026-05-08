@@ -1,6 +1,8 @@
 // Procedural ambient audio — all generated via Web Audio API, no files
 // Cricket chirps, frog croaks, bird calls, rain, thunder, water ambience
 
+import { isSilentSwamp } from './game/unlocks.js';
+
 let ctx = null;
 let started = false;
 let masterGain = null;
@@ -39,7 +41,7 @@ export function resumeAudio() {
       if (!AC) throw new Error('Web Audio API unavailable');
       ctx = new AC();
       masterGain = ctx.createGain();
-      masterGain.gain.value = muted ? 0 : 0.3;
+      masterGain.gain.value = muted ? 0 : (isSilentSwamp() ? 0.15 : 0.3);
       masterGain.connect(ctx.destination);
     } catch (e) {
       audioUnavailable = true;
@@ -59,7 +61,7 @@ export function resumeAudio() {
 export function toggleMute() {
   muted = !muted;
   if (masterGain) {
-    masterGain.gain.value = muted ? 0 : 0.3;
+    masterGain.gain.value = muted ? 0 : (isSilentSwamp() ? 0.15 : 0.3);
   }
   return muted;
 }

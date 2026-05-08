@@ -5,6 +5,7 @@ import { CANVAS_W } from '../config.js';
 import { distance } from '../utils/math.js';
 import { playBite } from '../audio.js';
 import { spawnKillBlood, triggerVignettePulse } from '../game/particles.js';
+import { applyHungerRate } from '../game/unlocks.js';
 
 // Module-level reference to the shared particle state — set by initAiParticles().
 let _particles = null;
@@ -213,7 +214,7 @@ export function aiSystem(world, dt, rng, waterY) {
       // so we just fall through and let breeding system manage that state
 
       // Hunger/energy drain still applies to player gator
-      gator.hunger = Math.min(1, gator.hunger + dt * 0.015 * (gator.traits?.metabolism || 1));
+      gator.hunger = Math.min(1, gator.hunger + dt * applyHungerRate(0.015) * (gator.traits?.metabolism || 1));
       if (gator.state !== 'sleeping') {
         const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
         gator.energy = Math.max(0, gator.energy - dt * activityDrain);
@@ -258,7 +259,7 @@ export function aiSystem(world, dt, rng, waterY) {
         gator.frame = 'idle';
         transition(gator, 'idle', rng);
       }
-      gator.hunger = Math.min(1, gator.hunger + dt * 0.015 * (gator.traits?.metabolism || 1));
+      gator.hunger = Math.min(1, gator.hunger + dt * applyHungerRate(0.015) * (gator.traits?.metabolism || 1));
       if (gator.state !== 'sleeping') {
         const activityDrain = (gator.state === 'hunting' || gator.state === 'wandering') ? 0.01 : 0.005;
         gator.energy = Math.max(0, gator.energy - dt * activityDrain);

@@ -35,7 +35,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🐊</text></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%230a0a12' width='180' height='180'/><text x='90' y='140' font-size='140' text-anchor='middle'>🐊</text></svg>">
 
-  <link rel="stylesheet" href="style.css?v=20260507-wave2">
+  <link rel="stylesheet" href="style.css?v=20260508-batch2">
 
   <!-- JSON-LD: schema.org CreativeWork for richer search previews -->
   <script type="application/ld+json">
@@ -121,7 +121,10 @@
         <button type="button" class="title-back" data-action="back">back</button>
       </div>
 
-      <button type="button" class="title-vault-link" id="title-vault-btn">vault</button>
+      <div class="title-meta-links">
+        <button type="button" class="title-vault-link" id="title-vault-btn">vault</button>
+        <button type="button" class="title-vault-link" id="title-ach-btn">achievements</button>
+      </div>
 
       <div class="title-footer">biggatorenergy.com</div>
     </div>
@@ -151,11 +154,16 @@
       </svg>
       <h2 id="game-over-title">the bloodline is gone</h2>
       <div id="game-over-stats"></div>
+      <div id="game-over-postmortem" class="game-over-postmortem"></div>
+      <div id="game-over-achievements" class="game-over-achievements hidden"></div>
       <div class="bge-row">
         <button type="button" class="bge-btn bge-btn-small" id="game-over-terrarium">watch the swamp</button>
         <button type="button" class="bge-btn bge-btn-small bge-btn-primary" id="game-over-restart">new dynasty</button>
       </div>
-      <button type="button" class="bge-vault-link" id="game-over-vault-btn">vault</button>
+      <div class="game-over-footer-links">
+        <button type="button" class="bge-vault-link" id="game-over-vault-btn">vault</button>
+        <button type="button" class="bge-vault-link" id="game-over-ach-btn">achievements</button>
+      </div>
     </div>
   </div>
   <div id="unlocks-shop" class="bge-overlay hidden" role="dialog" aria-labelledby="unlocks-shop-title" aria-modal="true">
@@ -174,6 +182,19 @@
       <div class="unlocks-list" id="unlocks-list"></div>
       <div class="unlocks-feedback" id="unlocks-feedback"></div>
       <button type="button" class="bge-vault-link" id="unlocks-close">close</button>
+    </div>
+  </div>
+
+  <!-- Achievements overlay -->
+  <div id="achievements-overlay" class="bge-overlay hidden" role="dialog" aria-labelledby="achievements-overlay-title" aria-modal="true">
+    <div class="bge-card achievements-card">
+      <!-- corner doodle: star -->
+      <svg class="bge-doodle bge-doodle-tr" aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 L14 9 L21 9 L15.5 14 L17.5 21 L12 17 L6.5 21 L8.5 14 L3 9 L10 9 Z" fill="#ddaa30" opacity="0.7"/>
+      </svg>
+      <h2 id="achievements-overlay-title">achievements</h2>
+      <div id="achievements-panel"><!-- populated by renderAchievementsPanel --></div>
+      <button type="button" class="bge-vault-link" id="achievements-close">close</button>
     </div>
   </div>
 
@@ -282,6 +303,6 @@
       Big Gator Energy needs JavaScript to run — the simulator is entirely client-side.
     </p>
   </noscript>
-  <script type="module" src="js/main.js?v=20260507-wave2"></script>
+  <script type="module" src="js/main.js?v=20260508-batch2"></script>
 </body>
 </html>
