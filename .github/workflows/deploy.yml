@@ -26,4 +26,4 @@ jobs:
           chmod 600 ~/.ssh/key
           ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/key -o StrictHostKeyChecking=yes smank@"$HOST" \
-            'set -e; cd /srv/biggatorenergy && git pull --ff-only && docker build -t biggatorenergy . && (docker stop biggatorenergy || true) && (docker rm biggatorenergy || true) && docker run -d --name biggatorenergy --restart unless-stopped --network proxy -p 3333:80 biggatorenergy && docker image prune -f'
+            'set -e; cd /srv/biggatorenergy && git pull --ff-only && docker build -t biggatorenergy . && (docker stop biggatorenergy || true) && (docker rm biggatorenergy || true) && docker run -d --name biggatorenergy --restart unless-stopped --network proxy biggatorenergy && docker image prune -f'
